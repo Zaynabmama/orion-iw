@@ -153,7 +153,7 @@ def sync_tenant(tenant_config, orion_client, log):
     save_state(tenant_name, state)
     log(f"[{tenant_name}] done. processed={processed} skipped={skipped} duplicates={duplicates} "
         f"last_updated_at={latest_updated_at}")
-    return processed, skipped
+    return processed, skipped, duplicates
 
 
 def main():
@@ -185,6 +185,7 @@ def main():
 
     total_processed = 0
     total_skipped = 0
+    total_duplicates = 0
     failed_tenants = []
     for tenant_config in tenant_configs:
         tenant_name = tenant_config["tenant_name"]
@@ -193,9 +194,10 @@ def main():
             failed_tenants.append(tenant_name)
             continue
         try:
-            processed, skipped = sync_tenant(tenant_config, orion_client, log)
+            processed, skipped, duplicates = sync_tenant(tenant_config, orion_client, log)
             total_processed += processed
             total_skipped += skipped
+            total_duplicates += duplicates
         except Exception as e:
             # One tenant's failure (bad credentials, network issue, etc.) must not
             # stop the others from syncing.
@@ -203,12 +205,15 @@ def main():
             failed_tenants.append(tenant_name)
 
     log(f"\nAll tenants done. total_processed={total_processed} total_skipped={total_skipped} "
-        f"failed_tenants={failed_tenants}")
+        f"total_duplicates={total_duplicates} failed_tenants={failed_tenants}")
 
     log_path = _write_log(log_lines)
 
-    if total_skipped or failed_tenants:
-        _send_alert(total_processed, total_skipped, failed_tenants, log_lines, log_path)
+    # Duplicates count as alert-worthy too, per the user, 2026-08-14: even though
+    # Orion itself blocks the re-post, a duplicate is still worth a human look
+    # (e.g. confirming an earlier partial run didn't post it with wrong data).
+    if total_skipped or total_duplicates or failed_tenants:
+        _send_alert(total_processed, total_skipped, total_duplicates, failed_tenants, log_lines, log_path)
 
 
 def _write_log(log_lines):
@@ -220,15 +225,18 @@ def _write_log(log_lines):
     return path
 
 
-def _send_alert(total_processed, total_skipped, failed_tenants, log_lines, log_path):
+def _send_alert(total_processed, total_skipped, total_duplicates, failed_tenants, log_lines, log_path):
     recipients = [addr.strip() for addr in os.environ.get("ALERT_RECIPIENTS", "").split(",") if addr.strip()]
     if not recipients:
-        print("[WARN] Skipped/failed invoices this run, but ALERT_RECIPIENTS isn't set in .env. No email sent.")
+        print("[WARN] Skipped/duplicate/failed invoices this run, but ALERT_RECIPIENTS isn't set in .env. No email sent.")
         return
 
-    subject = f"Orion sync: {total_skipped} skipped" + (f", {len(failed_tenants)} tenant(s) failed" if failed_tenants else "")
+    subject = f"Orion sync: {total_skipped} skipped, {total_duplicates} duplicate(s)" + (
+        f", {len(failed_tenants)} tenant(s) failed" if failed_tenants else ""
+    )
     body = (
-        f"processed={total_processed} skipped={total_skipped} failed_tenants={failed_tenants}\n"
+        f"processed={total_processed} skipped={total_skipped} duplicates={total_duplicates} "
+        f"failed_tenants={failed_tenants}\n"
         f"Full log saved at: {log_path}\n\n"
         + "\n".join(log_lines)
     )
