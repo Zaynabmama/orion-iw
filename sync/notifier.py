@@ -1,5 +1,5 @@
 """Sends run-summary alert emails via Microsoft Graph (app-only client-credentials
-auth, since this sender mailbox -- Donotreply@mindware.net -- isn't a real user
+auth, since this sender mailbox, Donotreply@mindware.net, isn't a real user
 logging in interactively). Used by main.py to alert on skipped/failed invoices
 once the nightly sync runs unattended, since a skip that isn't caught can be
 silently lost forever (see mapper.py/main.py state-tracking notes).
@@ -26,7 +26,7 @@ def _get_graph_token(tenant_id, client_id, client_secret):
 def send_alert(subject, body_text, recipients):
     """recipients: list of email address strings. Reads GRAPH_TENANT_ID/
     GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET/GRAPH_SENDER from the environment
-    (see .env) -- raises if any are missing rather than failing silently,
+    (see .env). Raises if any are missing rather than failing silently,
     since a broken alert path defeats the whole point of alerting."""
     tenant_id = os.environ["GRAPH_TENANT_ID"]
     client_id = os.environ["GRAPH_CLIENT_ID"]

@@ -9,7 +9,7 @@ config file in tenants/*.json (see tenants/_template.json) and its own
 incremental sync state in state/<tenant>.json.
 
 Every run writes a full log to logs/<timestamp>.log and, if anything was
-skipped or a tenant failed, emails a summary via notifier.send_alert() -- this
+skipped or a tenant failed, emails a summary via notifier.send_alert(). This
 is the safety net for the known gap where a skipped invoice can permanently
 drop out of future runs once a later invoice's success advances the tenant's
 sync checkpoint past it (see mapper.py "Invoice date" / account_config notes
@@ -102,12 +102,12 @@ def sync_tenant(tenant_config, orion_client, log):
         code = invoice.get("code") or ""
         if invoice_prefix and not code.startswith(invoice_prefix):
             log(f"[{tenant_name}] [SKIP] invoice {invoice_id}: code {code!r} does not "
-                f"start with this tenant's prefix {invoice_prefix!r} -- check config.")
+                f"start with this tenant's prefix {invoice_prefix!r}. Check config.")
             skipped += 1
             continue
 
-        # Mindware bills the partner (billingTo), not the end customer (account) --
-        # that's the account whose `code` becomes Orion's "Customer code" field.
+        # Mindware bills the partner (billingTo), not the end customer (account).
+        # That's the account whose `code` becomes Orion's "Customer code" field.
         billing_id = (invoice.get("billingTo") or invoice["account"])["id"]
         end_customer_id = invoice["account"]["id"]
 
@@ -159,8 +159,8 @@ def main():
         else None
     )
     if orion_client is None:
-        log("[INFO] ORION_BASE_URL/ORION_USERNAME/ORION_PASSWORD not fully set in .env "
-            "-- payloads will be saved to outbox/ instead of posted to Orion.")
+        log("[INFO] ORION_BASE_URL/ORION_USERNAME/ORION_PASSWORD not fully set in .env. "
+            "Payloads will be saved to outbox/ instead of posted to Orion.")
 
     tenant_configs = load_tenant_configs()
     if not tenant_configs:
@@ -174,7 +174,7 @@ def main():
     for tenant_config in tenant_configs:
         tenant_name = tenant_config["tenant_name"]
         if not tenant_config["bss"]["username"]:
-            log(f"[{tenant_name}] [SKIP TENANT] no credentials configured yet -- fill in tenants/{tenant_name}.json")
+            log(f"[{tenant_name}] [SKIP TENANT] no credentials configured yet. Fill in tenants/{tenant_name}.json")
             failed_tenants.append(tenant_name)
             continue
         try:
@@ -208,7 +208,7 @@ def _write_log(log_lines):
 def _send_alert(total_processed, total_skipped, failed_tenants, log_lines, log_path):
     recipients = [addr.strip() for addr in os.environ.get("ALERT_RECIPIENTS", "").split(",") if addr.strip()]
     if not recipients:
-        print("[WARN] Skipped/failed invoices this run, but ALERT_RECIPIENTS isn't set in .env -- no email sent.")
+        print("[WARN] Skipped/failed invoices this run, but ALERT_RECIPIENTS isn't set in .env. No email sent.")
         return
 
     subject = f"Orion sync: {total_skipped} skipped" + (f", {len(failed_tenants)} tenant(s) failed" if failed_tenants else "")
@@ -220,7 +220,7 @@ def _send_alert(total_processed, total_skipped, failed_tenants, log_lines, log_p
     try:
         notifier.send_alert(subject, body, recipients)
     except Exception as e:
-        # Don't let a broken alert path crash the run itself -- the log file on
+        # Don't let a broken alert path crash the run itself. The log file on
         # disk is still the fallback record even if the email never went out.
         print(f"[WARN] Failed to send alert email: {type(e).__name__}: {e}")
 

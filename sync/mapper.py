@@ -2,29 +2,29 @@
 
 Target shape (2026-08-11): the human-readable "Cloud Invoice" field-name schema the
 user showed from a real Orion invoice (partner TRANSCO TRADING, UAE, invoice
-DNAE-26-006948) -- e.g. "Company Code", "Customer code", "Item Taxes" with
+DNAE-26-006948), e.g. "Company Code", "Customer code", "Item Taxes" with
 itedTedBasis/itedNetFcAmt/itedNetLcAmt. This replaced the earlier flat
 USERID/APICODE/head/Item shape copied from the Autodesk SF Orderdesk sample,
 which is no longer believed to be the right target for this integration.
 
 Verified against the user's real numbers before trusting the shape: itedNetFcAmt
 (0.22) = itedTaxableFcAmt (4.48) * itedTedRate (5.0) / 100, and itedNetLcAmt (0.06)
-= itedNetFcAmt * the local->USD exchange rate (0.272294078 for AED) -- so Orion's
+= itedNetFcAmt * the local->USD exchange rate (0.272294078 for AED). So Orion's
 "Fc" (foreign currency) is the invoice's local transaction currency (AED/SAR/...)
 and "Lc" (local currency) is actually Orion's USD group/ledger currency. Both
 reconciled exactly, so this mapping is trusted, not guessed.
 
 Important: invoice['account'] is the END CUSTOMER (the actual license holder/
-subscriber, e.g. "Saudi Constructioneers Limited") -- Mindware does not bill them
+subscriber, e.g. "Saudi Constructioneers Limited"). Mindware does not bill them
 directly. invoice['billingTo'] is the PARTNER/reseller Mindware actually invoices,
 and it's the partner's account that carries the Orion `code` (confirmed: real
 billingTo accounts cross-matched against /api/accounts all have codes, e.g.
 "Delta Line International -DLI" -> "CK1D0030"). So Customer code/ship/bill
 addresses and account_config below are all keyed off the *billing* account, not
 the end customer. "End User Details" needs the end customer's own account too
-(for its country), fetched separately -- see main.py.
+(for its country), fetched separately (see main.py).
 
-There are 6 Mindware BSS tenants, each a fully separate database -- account ids,
+There are 6 Mindware BSS tenants, each a fully separate database, so account ids,
 payment-method ids, and Orion config can all differ per tenant. So none of the
 lookup tables below are module-level constants; they're passed into
 build_orion_payload() per call, sourced from that tenant's config file
@@ -79,9 +79,9 @@ class UnhandledDiscountError(Exception):
     pass
 
 
-# Orion doesn't book marketplace lines against per-product SKUs -- BSS product
-# codes are Microsoft part numbers like "CFQ7TTC0LH18:0001" -- but against a
-# small set of consolidated item codes (MS-CNS, MSAZ-CNS, ...), resolved by
+# Orion doesn't book marketplace lines against per-product SKUs. BSS product
+# codes are Microsoft part numbers like "CFQ7TTC0LH18:0001", but Orion books
+# against a small set of consolidated item codes (MS-CNS, MSAZ-CNS, ...), resolved by
 # keyword match on the product name. Copied verbatim from the existing
 # report-conversion script's KEYWORD_MAP (2026-08-10) so the two stay easy to
 # diff; matching is case-insensitive substring, first hit wins, so order matters.
@@ -98,7 +98,7 @@ KEYWORD_MAP = {
     ("Project Professional 2024 (Commercial) (Subs ID)", "project professional 2024", "MSPER-CNS"): "MSPER-CNS",
     ("SQL Server 2025 - 1 User CAL (Commercial)", "sql server 2025 - 1 user cal", "MSPER-CNS"): "MSPER-CNS",
     ("SQL Server 2025 Enterprise core - 2 core License Pack (Commercial)", "sql server 2025 enterprise core", "MSPER-CNS"): "MSPER-CNS",
-    # Not in the source script's map (a gap there too) -- seen on real KSA invoices
+    # Not in the source script's map either (a gap there too), seen on real KSA invoices
     # 2026-08-10; every other SQL Server 2025 product maps to MSPER-CNS.
     ("SQL Server 2025 Standard core - 2 core License Pack (Commercial)", "sql server 2025 standard core", "MSPER-CNS"): "MSPER-CNS",
     ("SQL Server 2025 Standard edition Perpetual 1 Server License (Commercial)", "sql server 2025 standard edition perpetual 1 server license", "MSPER-CNS"): "MSPER-CNS",
@@ -128,8 +128,8 @@ def resolve_item_code(product_name):
             if keyword.lower() in name:
                 return code
     raise MissingItemCodeError(
-        f"No KEYWORD_MAP entry matches product name {product_name!r} -- "
-        f"add a keyword for it in mapper.py."
+        f"No KEYWORD_MAP entry matches product name {product_name!r}. "
+        f"Add a keyword for it in mapper.py."
     )
 
 
@@ -137,21 +137,21 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
                          payment_term_map, account_config, run_date=None):
     """invoice: a BSS invoice dict (from BSSClient.iter_invoices, with items/customFields included).
     billing_account: resolved BSS account (BSSClient.get_account) for the *billing*
-        party -- invoice['billingTo']['id'] if present, else invoice['account']['id'].
+        party: invoice['billingTo']['id'] if present, else invoice['account']['id'].
     end_customer_account: resolved BSS account for invoice['account'] (the end
-        customer) -- needed only for its country, for "End User Details".
+        customer), needed only for its country, for "End User Details".
     orion_config: this tenant's dict of {company_code, txn_code, ship_mode,
         doc_location, sales_location, del_location, tax_code, tax_percent,
         mode_of_payment, payment_mode, ...}. Locations/tax are per-tenant, keyed
         off the tenant's invoice prefix (DNSA/DNKW/...) in the existing
         report-conversion script. ("Created by user ID" was dropped from the
-        outgoing payload per the user, 2026-08-14 -- created_by_user_id in the
+        outgoing payload per the user, 2026-08-14; created_by_user_id in the
         tenant config files is now unused.)
     payment_term_map: this tenant's {BSS payment method id (str) -> Orion "Terms code"}.
-    account_config: this tenant's {BSS billing account id (str) -> {salesman}}; an
+    account_config: this tenant's {BSS billing account id (str) -> {salesman}}. An
         optional "_default" key is used for any billing account id with no entry
         of its own (for tenants where every partner shares one salesman code).
-    run_date: datetime to stamp as "Created date" (defaults to now) -- when the
+    run_date: datetime to stamp as "Created date" (defaults to now), for when the
         sync actually creates this record in Orion, not the BSS invoice date.
 
     Returns a dict shaped like the real Orion "Cloud Invoice" sample the user
@@ -173,11 +173,11 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
     if not customer_code:
         raise MissingCustomerCodeError(
             f"BSS billing account id {billing_id} ({billing_ref.get('name')}) has no "
-            f"'code' set in Mindware BSS -- it needs one there before this invoice can sync."
+            f"'code' set in Mindware BSS. It needs one there before this invoice can sync."
         )
 
     # "Invoice date"/"Delivery date" are stamped as the date this sync actually
-    # posts to Orion, not the original BSS invoice date -- confirmed with the user
+    # posts to Orion, not the original BSS invoice date. Confirmed with the user
     # 2026-08-14 after Orion rejected a backdated invoice with "Invoice Date cannot
     # be less than today's date". Same value as "Created date" below.
     posting_dt = run_date or datetime.now(timezone.utc)
@@ -185,9 +185,9 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
     bill_address = ship_address  # same formula as ShipAddress in every real sample seen.
 
     # The partner's real purchase-order number lives in a BSS custom field named
-    # "LPO number" (id 850), nested as groupFields[].values[0].value. Often empty --
-    # not every partner submits an LPO. NOTE: the real sample the user provided
-    # has no field for this at all -- unclear if this schema drops it or if it's
+    # "LPO number" (id 850), nested as groupFields[].values[0].value. Often empty,
+    # since not every partner submits an LPO. NOTE: the real sample the user provided
+    # has no field for this at all; unclear if this schema drops it or if it's
     # just absent on that particular invoice. Kept as a guess pending confirmation
     # (see mapper module docstring / conversation notes).
     lpo_number = ""
@@ -208,7 +208,7 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
 
     # BSS API amounts (unitPrice/total/unitCost) are in invoice['currency'] (USD),
     # but the booked, customer-facing document is in invoice['transactionCurrency']
-    # (e.g. AED) at invoice['exchangeRate'] (USD->local, e.g. 3.6725) -- Orion
+    # (e.g. AED) at invoice['exchangeRate'] (USD->local, e.g. 3.6725). Orion
     # invoices are entered in local currency (what the manual process types in
     # today). "Exchange rate" is emitted local->USD, matching both the existing
     # report script's EXCHANGE_RATE_MAP convention and the real sample (0.272294078
@@ -219,8 +219,8 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
 
     # Every BSS line seen so far has a zero discount (unitPrice is already the net
     # partner price). The real sample DOES have a "Discount percentage" field, so
-    # unlike the old flat schema this isn't a hard blocker -- discount% is passed
-    # through directly below -- but FC actual value's discount formula is UNVERIFIED
+    # unlike the old flat schema this isn't a hard blocker; discount% is passed
+    # through directly below. But FC actual value's discount formula is UNVERIFIED
     # (no real non-zero-discount invoice has been seen to check the math against).
     tax_percent = orion_config.get("tax_percent")
     tax_code = orion_config.get("tax_code", "")
@@ -229,7 +229,7 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
     for item in invoice.get("items", []):
         product = item.get("product") or {}
         # Some lines (seen 2026-08-14, e.g. DNSA-26-003827) carry no linked catalog
-        # product at all -- product.name is unavailable, but item['description']
+        # product at all. product.name is unavailable, but item['description']
         # has the same real product name ("M365 - Microsoft 365 Business Standard
         # (New Commerce)") that a normal line would've gotten from product.name.
         product_name = product.get("name") or item.get("description") or ""
@@ -251,8 +251,8 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             desc += f" | {format_date_iso(start_dt)} to {format_date_iso(end_dt)}"
 
         # Precise (unrounded) local-currency rate, used for the line total so a
-        # rounded display Rate can't drift the total on high-quantity lines --
-        # e.g. 0.17 USD x 3.75 rounded to 2dp (0.64) would overbill a 35,000-unit
+        # rounded display Rate can't drift the total on high-quantity lines.
+        # E.g. 0.17 USD x 3.75 rounded to 2dp (0.64) would overbill a 35,000-unit
         # line by 87.50 SAR if the total were derived from the rounded Rate instead
         # of computed directly like this.
         precise_rate = item["unitPrice"] * usd_to_local
@@ -282,13 +282,13 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             "FC actual value": fc_actual,
             "Created date": format_date_slash(run_date or datetime.now(timezone.utc)),
             # NB: "SubcriptionID" (missing the 's' in "Subscription") is the exact
-            # spelling in the real sample -- kept as-is since it's presumably the
+            # spelling in the real sample, kept as-is since it's presumably the
             # literal field name Orion's API expects.
             "SubcriptionID": sub_id,
             "Billing Start Date": format_date_mon2y(start_dt) if start_dt else "",
             "Billing End Date": format_date_mon2y(end_dt) if end_dt else "",
             # Confirmed with the user (2026-08-11): despite the field's name, this is
-            # the LINE'S TOTAL cost (BSS totalCost), not a per-unit price -- sent as a
+            # the LINE'S TOTAL cost (BSS totalCost), not a per-unit price. Sent as a
             # string to match the real sample's "Unit Cost Price": "2.28" (a string,
             # unlike the numeric fields around it).
             "Unit Cost Price": f"{item['totalCost'] * usd_to_local:.2f}" if item.get("totalCost") is not None else "",
@@ -330,18 +330,18 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         "Created date": created_date,
         "End User Details": end_user_details,
         "Inco Terms": orion_config["ship_mode"],
-        # BSS invoice number -- also the natural dedupe key (Orion should reject a
+        # BSS invoice number, also the natural dedupe key (Orion should reject a
         # second POST carrying the same Cloud Invoice No). The real sample has a
         # "-1" suffix on this field (e.g. "DNAE-26-006948-1") whose meaning is
-        # unconfirmed -- not reproduced here, see conversation notes.
+        # unconfirmed and not reproduced here; see conversation notes.
         "Cloud Invoice No": invoice.get("code", ""),
-        # Mode Of Payment/Payment Mode: still open questions -- the real sample
+        # Mode Of Payment/Payment Mode: still open questions. The real sample
         # showed "OC"/"5" for that invoice's own payment method, not a fixed
         # constant, contradicting the earlier assumption that this is always
         # "CASH". Left as this tenant's configured constant pending clarification.
         "Mode Of Payment": orion_config.get("mode_of_payment", ""),
         "Payment Mode": orion_config.get("payment_mode", ""),
-        # Sent as fixed constants per the user, 2026-08-14 -- every invoice this
+        # Sent as fixed constants per the user, 2026-08-14: every invoice this
         # sync creates is new/unpaid at creation time.
         "Invoice status": 1,
         "Status": "Unpaid",
