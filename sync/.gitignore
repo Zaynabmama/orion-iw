@@ -2,5 +2,6 @@
 __pycache__/
 state/
 outbox/
+logs/
 tenants/*.json
 !tenants/_template.json

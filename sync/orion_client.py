@@ -81,7 +81,14 @@ class OrionClient:
             self._login()
             headers = {**self._headers(), "Content-Type": "application/json"}
             resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        resp.raise_for_status()
+        # raise_for_status()'s default message drops the response body, which is
+        # exactly where Orion puts the actual validation error on a 400 -- surface
+        # it instead of just "400 Client Error".
+        if not resp.ok:
+            raise requests.HTTPError(
+                f"{resp.status_code} {resp.reason} for {url} -- response body: {resp.text}",
+                response=resp,
+            )
         return resp.json()
 
 

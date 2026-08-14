@@ -2,15 +2,25 @@
 new/updated invoices from each, map each to the Orion JSON shape, and push (or,
 for now, save locally).
 
-Run manually with `python main.py`, or wire up to Task Scheduler / cron for a
-recurring sync. Each tenant is a fully separate Mindware BSS database (own
-accounts, own payment methods) with its own config file in tenants/*.json (see
-tenants/_template.json) and its own incremental sync state in state/<tenant>.json.
+Run manually with `python main.py`, or via a scheduled task for a recurring
+sync (see nightly Task Scheduler setup, 2026-08-14). Each tenant is a fully
+separate Mindware BSS database (own accounts, own payment methods) with its own
+config file in tenants/*.json (see tenants/_template.json) and its own
+incremental sync state in state/<tenant>.json.
+
+Every run writes a full log to logs/<timestamp>.log and, if anything was
+skipped or a tenant failed, emails a summary via notifier.send_alert() -- this
+is the safety net for the known gap where a skipped invoice can permanently
+drop out of future runs once a later invoice's success advances the tenant's
+sync checkpoint past it (see mapper.py "Invoice date" / account_config notes
+and the 2026-08-14 conversation). The user chose alerting over fixing that
+checkpoint gap outright, so skips MUST stay visible here.
 """
 
 import glob
 import json
 import os
+from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -24,10 +34,12 @@ from mapper import (
     UnhandledDiscountError,
 )
 from orion_client import OrionClient, push_payload
+import notifier
 
 SYNC_DIR = os.path.dirname(__file__)
 TENANTS_DIR = os.path.join(SYNC_DIR, "tenants")
 STATE_DIR = os.path.join(SYNC_DIR, "state")
+LOGS_DIR = os.path.join(SYNC_DIR, "logs")
 
 
 def load_tenant_configs():
@@ -55,7 +67,7 @@ def save_state(tenant_name, state):
         json.dump(state, f, indent=2)
 
 
-def sync_tenant(tenant_config, orion_client):
+def sync_tenant(tenant_config, orion_client, log):
     tenant_name = tenant_config["tenant_name"]
     bss = tenant_config["bss"]
     orion_config = tenant_config["orion"]
@@ -89,8 +101,8 @@ def sync_tenant(tenant_config, orion_client):
         # belong together, so skip rather than book with the wrong constants.
         code = invoice.get("code") or ""
         if invoice_prefix and not code.startswith(invoice_prefix):
-            print(f"[{tenant_name}] [SKIP] invoice {invoice_id}: code {code!r} does not "
-                  f"start with this tenant's prefix {invoice_prefix!r} -- check config.")
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id}: code {code!r} does not "
+                f"start with this tenant's prefix {invoice_prefix!r} -- check config.")
             skipped += 1
             continue
 
@@ -114,23 +126,30 @@ def sync_tenant(tenant_config, orion_client):
             )
         except (MissingAccountConfigError, MissingCustomerCodeError,
                 MissingItemCodeError, MissingPaymentTermError, UnhandledDiscountError) as e:
-            print(f"[{tenant_name}] [SKIP] invoice {invoice_id}: {e}")
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): {e}")
             skipped += 1
             continue
 
         result = push_payload(payload, invoice_id, tenant_name, orion_client=orion_client)
-        print(f"[{tenant_name}] [OK] invoice {invoice_id} -> {result}")
+        log(f"[{tenant_name}] [OK] invoice {invoice_id} -> {result}")
         processed += 1
         latest_updated_at = invoice["updatedAt"]
 
     state["last_updated_at"] = latest_updated_at
     save_state(tenant_name, state)
-    print(f"[{tenant_name}] done. processed={processed} skipped={skipped} last_updated_at={latest_updated_at}")
+    log(f"[{tenant_name}] done. processed={processed} skipped={skipped} last_updated_at={latest_updated_at}")
     return processed, skipped
 
 
 def main():
     load_dotenv(os.path.join(SYNC_DIR, ".env"))
+
+    log_lines = []
+
+    def log(msg):
+        print(msg)
+        log_lines.append(msg)
+
     orion_base_url = os.environ.get("ORION_BASE_URL") or None
     orion_username = os.environ.get("ORION_USERNAME") or None
     orion_password = os.environ.get("ORION_PASSWORD") or None
@@ -140,12 +159,13 @@ def main():
         else None
     )
     if orion_client is None:
-        print("[INFO] ORION_BASE_URL/ORION_USERNAME/ORION_PASSWORD not fully set in .env "
-              "-- payloads will be saved to outbox/ instead of posted to Orion.")
+        log("[INFO] ORION_BASE_URL/ORION_USERNAME/ORION_PASSWORD not fully set in .env "
+            "-- payloads will be saved to outbox/ instead of posted to Orion.")
 
     tenant_configs = load_tenant_configs()
     if not tenant_configs:
-        print(f"No tenant config files found in {TENANTS_DIR}. Copy tenants/_template.json and fill it in.")
+        log(f"No tenant config files found in {TENANTS_DIR}. Copy tenants/_template.json and fill it in.")
+        _write_log(log_lines)
         return
 
     total_processed = 0
@@ -154,21 +174,55 @@ def main():
     for tenant_config in tenant_configs:
         tenant_name = tenant_config["tenant_name"]
         if not tenant_config["bss"]["username"]:
-            print(f"[{tenant_name}] [SKIP TENANT] no credentials configured yet -- fill in tenants/{tenant_name}.json")
+            log(f"[{tenant_name}] [SKIP TENANT] no credentials configured yet -- fill in tenants/{tenant_name}.json")
             failed_tenants.append(tenant_name)
             continue
         try:
-            processed, skipped = sync_tenant(tenant_config, orion_client)
+            processed, skipped = sync_tenant(tenant_config, orion_client, log)
             total_processed += processed
             total_skipped += skipped
         except Exception as e:
             # One tenant's failure (bad credentials, network issue, etc.) must not
             # stop the others from syncing.
-            print(f"[{tenant_name}] [TENANT FAILED] {type(e).__name__}: {e}")
+            log(f"[{tenant_name}] [TENANT FAILED] {type(e).__name__}: {e}")
             failed_tenants.append(tenant_name)
 
-    print(f"\nAll tenants done. total_processed={total_processed} total_skipped={total_skipped} "
-          f"failed_tenants={failed_tenants}")
+    log(f"\nAll tenants done. total_processed={total_processed} total_skipped={total_skipped} "
+        f"failed_tenants={failed_tenants}")
+
+    log_path = _write_log(log_lines)
+
+    if total_skipped or failed_tenants:
+        _send_alert(total_processed, total_skipped, failed_tenants, log_lines, log_path)
+
+
+def _write_log(log_lines):
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path = os.path.join(LOGS_DIR, f"{ts}.log")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(log_lines) + "\n")
+    return path
+
+
+def _send_alert(total_processed, total_skipped, failed_tenants, log_lines, log_path):
+    recipients = [addr.strip() for addr in os.environ.get("ALERT_RECIPIENTS", "").split(",") if addr.strip()]
+    if not recipients:
+        print("[WARN] Skipped/failed invoices this run, but ALERT_RECIPIENTS isn't set in .env -- no email sent.")
+        return
+
+    subject = f"Orion sync: {total_skipped} skipped" + (f", {len(failed_tenants)} tenant(s) failed" if failed_tenants else "")
+    body = (
+        f"processed={total_processed} skipped={total_skipped} failed_tenants={failed_tenants}\n"
+        f"Full log saved at: {log_path}\n\n"
+        + "\n".join(log_lines)
+    )
+    try:
+        notifier.send_alert(subject, body, recipients)
+    except Exception as e:
+        # Don't let a broken alert path crash the run itself -- the log file on
+        # disk is still the fallback record even if the email never went out.
+        print(f"[WARN] Failed to send alert email: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

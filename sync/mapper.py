@@ -142,9 +142,11 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         customer) -- needed only for its country, for "End User Details".
     orion_config: this tenant's dict of {company_code, txn_code, ship_mode,
         doc_location, sales_location, del_location, tax_code, tax_percent,
-        mode_of_payment, payment_mode, created_by_user_id, ...}. Locations/tax are
-        per-tenant, keyed off the tenant's invoice prefix (DNSA/DNKW/...) in the
-        existing report-conversion script.
+        mode_of_payment, payment_mode, ...}. Locations/tax are per-tenant, keyed
+        off the tenant's invoice prefix (DNSA/DNKW/...) in the existing
+        report-conversion script. ("Created by user ID" was dropped from the
+        outgoing payload per the user, 2026-08-14 -- created_by_user_id in the
+        tenant config files is now unused.)
     payment_term_map: this tenant's {BSS payment method id (str) -> Orion "Terms code"}.
     account_config: this tenant's {BSS billing account id (str) -> {salesman}}; an
         optional "_default" key is used for any billing account id with no entry
@@ -174,7 +176,11 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             f"'code' set in Mindware BSS -- it needs one there before this invoice can sync."
         )
 
-    invoice_dt = _parse(invoice["invoiceDate"])
+    # "Invoice date"/"Delivery date" are stamped as the date this sync actually
+    # posts to Orion, not the original BSS invoice date -- confirmed with the user
+    # 2026-08-14 after Orion rejected a backdated invoice with "Invoice Date cannot
+    # be less than today's date". Same value as "Created date" below.
+    posting_dt = run_date or datetime.now(timezone.utc)
     ship_address = f"{customer_code}-B"
     bill_address = ship_address  # same formula as ShipAddress in every real sample seen.
 
@@ -274,7 +280,6 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             "Foreign currency value": fc_value,
             "Discount percentage": _num(discount_pct),
             "FC actual value": fc_actual,
-            "Created by user ID": orion_config.get("created_by_user_id", ""),
             "Created date": format_date_slash(run_date or datetime.now(timezone.utc)),
             # NB: "SubcriptionID" (missing the 's' in "Subscription") is the exact
             # spelling in the real sample -- kept as-is since it's presumably the
@@ -292,7 +297,6 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
                     # "R" is the only value seen so far (rate-based?); meaning unconfirmed.
                     "itedTedBasis": "R",
                     "itedTedRate": tax_percent_num,
-                    "itedTaxableFcAmt": fc_actual,
                     "itedTedCurrCode": local_currency,
                     "itedNetFcAmt": net_fc,
                     "itedNetLcAmt": net_lc,
@@ -306,24 +310,23 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
     if end_country:
         end_user_details += f" ; {end_country}"
 
-    created_date = format_date_slash(run_date or datetime.now(timezone.utc))
+    created_date = format_date_slash(posting_dt)
 
     return {
         "Company Code": orion_config["company_code"],
         "Transaction Code": orion_config["txn_code"],
-        "Invoice date": format_date_slash(invoice_dt),
+        "Invoice date": created_date,
         "Document source location code": orion_config["doc_location"],
         "Customer code": customer_code,
         "Location code": orion_config["sales_location"],
         "Delivery location code": orion_config["del_location"],
         "Ship to address code": ship_address,
         "Bill to address code": bill_address,
-        "Delivery date": format_date_slash(invoice_dt),
+        "Delivery date": created_date,
         "Document currency code": local_currency,
         "Exchange rate": orion_rate,
         "Salesman code": config["salesman"],
         "Terms code": terms_code,
-        "Created by user ID": orion_config.get("created_by_user_id", ""),
         "Created date": created_date,
         "End User Details": end_user_details,
         "Inco Terms": orion_config["ship_mode"],
@@ -338,8 +341,11 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         # "CASH". Left as this tenant's configured constant pending clarification.
         "Mode Of Payment": orion_config.get("mode_of_payment", ""),
         "Payment Mode": orion_config.get("payment_mode", ""),
-        # "Status" looks like an Orion-assigned/output field (e.g. "Unpaid") rather
-        # than something we'd declare on create -- omitted from the outgoing payload.
-        "LPO Number": lpo_number,
+        # Sent as fixed constants per the user, 2026-08-14 -- every invoice this
+        # sync creates is new/unpaid at creation time.
+        "Invoice status": 1,
+        "Status": "Unpaid",
+        # Field renamed "LPO Number" -> "Customer LPO" per the user, 2026-08-14.
+        "Customer LPO": lpo_number,
         "Items": items,
     }

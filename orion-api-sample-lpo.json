@@ -1,0 +1,88 @@
+{
+  "Company Code": "MW",
+  "Transaction Code": "INVC",
+  "Invoice date": "14/08/2026",
+  "Document source location code": "KA000",
+  "Customer code": "CK1C0006",
+  "Location code": "KA000",
+  "Delivery location code": "KA200",
+  "Ship to address code": "CK1C0006-B",
+  "Bill to address code": "CK1C0006-B",
+  "Delivery date": "14/08/2026",
+  "Document currency code": "SAR",
+  "Exchange rate": 0.2666666667,
+  "Salesman code": "EK342",
+  "Terms code": "60",
+  "Created by user ID": "ORION",
+  "Created date": "14/08/2026",
+  "End User Details": "Makan Parking ; Saudi Arabia",
+  "Inco Terms": "EML",
+  "Cloud Invoice No": "DNSA-26-003795",
+  "Mode Of Payment": "OC",
+  "Payment Mode": "",
+  "Customer LPO": "2614554",
+  "Items": [
+    {
+      "Item code": "MS-CNS",
+      "Item description": "M365 - Microsoft 365 Business Basic (New Commerce) (ac52bb36-83ab-4d26-9540-43b9a159dabd) | CFQ7TTC0LH18:0001 | 2026-08-10 to 2027-08-09",
+      "Grade code 1": "NA",
+      "Grade code 2": "NA",
+      "UOM": "NOS",
+      "Location code": "KA000",
+      "Delivery location code": "KA200",
+      "Invoiced quantity": 49,
+      "Item Rate": 246.0,
+      "Foreign currency value": 12054.0,
+      "Discount percentage": 0,
+      "FC actual value": 12054.0,
+      "Created by user ID": "ORION",
+      "Created date": "14/08/2026",
+      "SubcriptionID": "ac52bb36-83ab-4d26-9540-43b9a159dabd",
+      "Billing Start Date": "10-AUG-26",
+      "Billing End Date": "09-AUG-27",
+      "Unit Cost Price": "12348.00",
+      "Item Taxes": [
+        {
+          "itedTedBasis": "R",
+          "itedTedRate": 15.0,
+          "itedTaxableFcAmt": 12054.0,
+          "itedTedCurrCode": "SAR",
+          "itedNetFcAmt": 1808.1,
+          "itedNetLcAmt": 482.16,
+          "TED code": "SLVAT15"
+        }
+      ]
+    },
+    {
+      "Item code": "MS-CNS",
+      "Item description": "M365 - Exchange Online (Plan 1) (New Commerce) (7398a2d9-e75d-47cf-ae2f-e08f25f5720b) | CFQ7TTC0LH16:0001 | 2026-08-10 to 2027-08-09",
+      "Grade code 1": "NA",
+      "Grade code 2": "NA",
+      "UOM": "NOS",
+      "Location code": "KA000",
+      "Delivery location code": "KA200",
+      "Invoiced quantity": 25,
+      "Item Rate": 144.0,
+      "Foreign currency value": 3600.0,
+      "Discount percentage": 0,
+      "FC actual value": 3600.0,
+      "Created by user ID": "ORION",
+      "Created date": "14/08/2026",
+      "SubcriptionID": "7398a2d9-e75d-47cf-ae2f-e08f25f5720b",
+      "Billing Start Date": "10-AUG-26",
+      "Billing End Date": "09-AUG-27",
+      "Unit Cost Price": "3600.00",
+      "Item Taxes": [
+        {
+          "itedTedBasis": "R",
+          "itedTedRate": 15.0,
+          "itedTaxableFcAmt": 3600.0,
+          "itedTedCurrCode": "SAR",
+          "itedNetFcAmt": 540.0,
+          "itedNetLcAmt": 144.0,
+          "TED code": "SLVAT15"
+        }
+      ]
+    }
+  ]
+}
