@@ -1,0 +1,42 @@
+{
+  "tenant_name": "REPLACE_WITH_SHORT_NAME",
+  "bss": {
+    "base_url": "https://mindware-bss.eu.infiterra.com",
+    "token_url": "https://mindware-bss.eu.infiterra.com/oauth/token",
+    "api_version": "3",
+    "username": "",
+    "password": "",
+    "client_id": "",
+    "client_secret": ""
+  },
+  "orion": {
+    "_comment": "invoice_prefix is this tenant's BSS invoice code prefix (DNSA, DNKW, ...); locations/tax/currency are per-tenant constants keyed off it. tax_code/tax_percent are emitted as TaxCode/TaxPercent (field names we proposed to the Orion team, see orion-api-sample.json). x_Currency/ExchangeRate/Rate now come from each invoice's own transactionCurrency/exchangeRate (amounts booked in LOCAL currency); currency/invoice_currency/exchange_rate here are reference only.",
+    "company_code": "MW",
+    "api_code": "INVMW",
+    "txn_code": "INVC",
+    "ship_mode": "EML",
+    "form_code": "0",
+    "mode_of_payment": "OC",
+    "invoice_prefix": "",
+    "doc_location": "",
+    "sales_location": "",
+    "del_location": "",
+    "tax_code": "",
+    "tax_percent": "",
+    "currency": "",
+    "invoice_currency": "",
+    "exchange_rate": null,
+    "created_by_user_id": "ED354"
+  },
+  "payment_term_map": {
+    "_comment": "BSS payment method id (from GET /api/organization/paymentmethods) -> Orion PaymentTerm string",
+    "REPLACE_WITH_PAYMENT_METHOD_ID": "REPLACE_WITH_ORION_TERM"
+  },
+  "account_config": {
+    "_comment": "Keyed by BSS billing (partner) account id, as a string -- i.e. invoice.billingTo.id, not invoice.account.id. Only sales_type + salesman are per-partner; locations are per-tenant (see orion section).",
+    "REPLACE_WITH_BSS_PARTNER_ACCOUNT_ID": {
+      "sales_type": "0",
+      "salesman": ""
+    }
+  }
+}

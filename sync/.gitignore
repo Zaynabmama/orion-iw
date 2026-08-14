@@ -1,0 +1,6 @@
+.env
+__pycache__/
+state/
+outbox/
+tenants/*.json
+!tenants/_template.json

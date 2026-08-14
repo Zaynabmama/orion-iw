@@ -1,0 +1,181 @@
+{
+  "Company Code": "MW",
+  "Transaction Code": "INVC",
+  "Invoice date": "23/04/2026",
+  "Document source location code": "KA000",
+  "Customer code": "CK1A0283",
+  "Location code": "KA000",
+  "Delivery location code": "KA200",
+  "Ship to address code": "CK1A0283-B",
+  "Bill to address code": "CK1A0283-B",
+  "Delivery date": "23/04/2026",
+  "Document currency code": "SAR",
+  "Exchange rate": 0.2666666667,
+  "Salesman code": "SM001",
+  "Terms code": "60",
+  "Created by user ID": "ED354",
+  "Created date": "11/08/2026",
+  "End User Details": "Al Rugaib Holdings ; Saudi Arabia",
+  "Inco Terms": "EML",
+  "Cloud Invoice No": "DNSA-26-001340",
+  "Mode Of Payment": "OC",
+  "Payment Mode": "",
+  "LPO Number": "10711",
+  "Items": [
+    {
+      "Item code": "MS-CNS",
+      "Item description": "M365 - Exchange Online (Plan 1) (New Commerce) (47398857-2bf6-4c5a-a431-4053d9ede6a8) | CFQ7TTC0LH16:0001 | 2026-04-23 to 2027-04-22",
+      "Grade code 1": "NA",
+      "Grade code 2": "NA",
+      "UOM": "NOS",
+      "Location code": "KA000",
+      "Delivery location code": "KA200",
+      "Invoiced quantity": 165,
+      "Item Rate": 144.0,
+      "Foreign currency value": 23760.0,
+      "Discount percentage": 0,
+      "FC actual value": 23760.0,
+      "Created by user ID": "ED354",
+      "Created date": "11/08/2026",
+      "SubcriptionID": "47398857-2bf6-4c5a-a431-4053d9ede6a8",
+      "Billing Start Date": "23-APR-26",
+      "Billing End Date": "22-APR-27",
+      "Unit Cost Price": "23760.00",
+      "Item Taxes": [
+        {
+          "itedTedBasis": "R",
+          "itedTedRate": 15.0,
+          "itedTaxableFcAmt": 23760.0,
+          "itedTedCurrCode": "SAR",
+          "itedNetFcAmt": 3564.0,
+          "itedNetLcAmt": 950.4,
+          "TED code": "SLVAT15"
+        }
+      ]
+    },
+    {
+      "Item code": "MS-CNS",
+      "Item description": "D365 - Dynamics 365 Business Central Premium (New Commerce) (a700cf4f-882d-4684-aa9c-0bf5fe231805) | CFQ7TTC0LH38:0001 | 2026-04-23 to 2027-04-22",
+      "Grade code 1": "NA",
+      "Grade code 2": "NA",
+      "UOM": "NOS",
+      "Location code": "KA000",
+      "Delivery location code": "KA200",
+      "Invoiced quantity": 5,
+      "Item Rate": 3258.0,
+      "Foreign currency value": 16290.0,
+      "Discount percentage": 0,
+      "FC actual value": 16290.0,
+      "Created by user ID": "ED354",
+      "Created date": "11/08/2026",
+      "SubcriptionID": "a700cf4f-882d-4684-aa9c-0bf5fe231805",
+      "Billing Start Date": "23-APR-26",
+      "Billing End Date": "22-APR-27",
+      "Unit Cost Price": "17325.00",
+      "Item Taxes": [
+        {
+          "itedTedBasis": "R",
+          "itedTedRate": 15.0,
+          "itedTaxableFcAmt": 16290.0,
+          "itedTedCurrCode": "SAR",
+          "itedNetFcAmt": 2443.5,
+          "itedNetLcAmt": 651.6,
+          "TED code": "SLVAT15"
+        }
+      ]
+    },
+    {
+      "Item code": "MS-CNS",
+      "Item description": "M365 - Microsoft 365 Business Basic (New Commerce) (66389756-d434-4ed8-883a-c71c67656f56) | CFQ7TTC0LH18:0001 | 2026-04-23 to 2027-04-22",
+      "Grade code 1": "NA",
+      "Grade code 2": "NA",
+      "UOM": "NOS",
+      "Location code": "KA000",
+      "Delivery location code": "KA200",
+      "Invoiced quantity": 10,
+      "Item Rate": 211.99,
+      "Foreign currency value": 2119.88,
+      "Discount percentage": 0,
+      "FC actual value": 2119.88,
+      "Created by user ID": "ED354",
+      "Created date": "11/08/2026",
+      "SubcriptionID": "66389756-d434-4ed8-883a-c71c67656f56",
+      "Billing Start Date": "23-APR-26",
+      "Billing End Date": "22-APR-27",
+      "Unit Cost Price": "2160.00",
+      "Item Taxes": [
+        {
+          "itedTedBasis": "R",
+          "itedTedRate": 15.0,
+          "itedTaxableFcAmt": 2119.88,
+          "itedTedCurrCode": "SAR",
+          "itedNetFcAmt": 317.98,
+          "itedNetLcAmt": 84.79,
+          "TED code": "SLVAT15"
+        }
+      ]
+    },
+    {
+      "Item code": "MS-CNS",
+      "Item description": "M365 - Exchange Online (Plan 2) (New Commerce) (0c060103-8bd6-4dd1-9c82-a10c0c3aae22) | CFQ7TTC0LH1P:0001 | 2026-04-23 to 2027-04-22",
+      "Grade code 1": "NA",
+      "Grade code 2": "NA",
+      "UOM": "NOS",
+      "Location code": "KA000",
+      "Delivery location code": "KA200",
+      "Invoiced quantity": 40,
+      "Item Rate": 288.0,
+      "Foreign currency value": 11520.0,
+      "Discount percentage": 0,
+      "FC actual value": 11520.0,
+      "Created by user ID": "ED354",
+      "Created date": "11/08/2026",
+      "SubcriptionID": "0c060103-8bd6-4dd1-9c82-a10c0c3aae22",
+      "Billing Start Date": "23-APR-26",
+      "Billing End Date": "22-APR-27",
+      "Unit Cost Price": "11520.00",
+      "Item Taxes": [
+        {
+          "itedTedBasis": "R",
+          "itedTedRate": 15.0,
+          "itedTaxableFcAmt": 11520.0,
+          "itedTedCurrCode": "SAR",
+          "itedNetFcAmt": 1728.0,
+          "itedNetLcAmt": 460.8,
+          "TED code": "SLVAT15"
+        }
+      ]
+    },
+    {
+      "Item code": "MS-CNS",
+      "Item description": "M365 - Microsoft 365 Copilot Business (New Commerce) (e771bf02-d631-4f62-8e52-ef3dff211bdb) | CFQ7TTC0MM8R:001P | 2026-04-23 to 2027-04-22",
+      "Grade code 1": "NA",
+      "Grade code 2": "NA",
+      "UOM": "NOS",
+      "Location code": "KA000",
+      "Delivery location code": "KA200",
+      "Invoiced quantity": 2,
+      "Item Rate": 723.0,
+      "Foreign currency value": 1446.0,
+      "Discount percentage": 0,
+      "FC actual value": 1446.0,
+      "Created by user ID": "ED354",
+      "Created date": "11/08/2026",
+      "SubcriptionID": "e771bf02-d631-4f62-8e52-ef3dff211bdb",
+      "Billing Start Date": "23-APR-26",
+      "Billing End Date": "22-APR-27",
+      "Unit Cost Price": "1458.00",
+      "Item Taxes": [
+        {
+          "itedTedBasis": "R",
+          "itedTedRate": 15.0,
+          "itedTaxableFcAmt": 1446.0,
+          "itedTedCurrCode": "SAR",
+          "itedNetFcAmt": 216.9,
+          "itedNetLcAmt": 57.84,
+          "TED code": "SLVAT15"
+        }
+      ]
+    }
+  ]
+}
