@@ -81,15 +81,36 @@ class OrionClient:
             self._login()
             headers = {**self._headers(), "Content-Type": "application/json"}
             resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        # raise_for_status()'s default message drops the response body, which is
-        # exactly where Orion puts the actual validation error on a 400. Surface
-        # it instead of just "400 Client Error".
         if not resp.ok:
+            # Orion returns this as a 400 when the same "Cloud Invoice No" was
+            # already posted in an earlier run (e.g. one that died partway through
+            # a batch, since the sync checkpoint only advances after a whole
+            # tenant's run finishes). That's not a real failure, the invoice is
+            # already in Orion, so it gets its own exception type: main.py treats
+            # it as a benign skip and keeps going, instead of aborting the batch.
+            try:
+                body = resp.json()
+            except ValueError:
+                body = {}
+            if "duplicate" in str(body.get("Response", "")).lower():
+                raise DuplicateInvoiceError(body.get("Response", ""), response=body)
+            # raise_for_status()'s default message drops the response body, which is
+            # exactly where Orion puts the actual validation error on a 400. Surface
+            # it instead of just "400 Client Error".
             raise requests.HTTPError(
                 f"{resp.status_code} {resp.reason} for {url}. Response body: {resp.text}",
                 response=resp,
             )
         return resp.json()
+
+
+class DuplicateInvoiceError(Exception):
+    """Raised when Orion rejects a create because that Cloud Invoice No already
+    exists there. response: Orion's parsed JSON body."""
+
+    def __init__(self, message, response=None):
+        super().__init__(message)
+        self.response = response
 
 
 def push_payload(payload, invoice_id, tenant_name, orion_client=None):

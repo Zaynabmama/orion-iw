@@ -33,7 +33,7 @@ from mapper import (
     MissingPaymentTermError,
     UnhandledDiscountError,
 )
-from orion_client import OrionClient, push_payload
+from orion_client import DuplicateInvoiceError, OrionClient, push_payload
 import notifier
 
 SYNC_DIR = os.path.dirname(__file__)
@@ -88,6 +88,7 @@ def sync_tenant(tenant_config, orion_client, log):
     account_cache = {}
     processed = 0
     skipped = 0
+    duplicates = 0
     latest_updated_at = state["last_updated_at"]
 
     invoice_prefix = orion_config.get("invoice_prefix")
@@ -130,14 +131,28 @@ def sync_tenant(tenant_config, orion_client, log):
             skipped += 1
             continue
 
-        result = push_payload(payload, invoice_id, tenant_name, orion_client=orion_client)
+        try:
+            result = push_payload(payload, invoice_id, tenant_name, orion_client=orion_client)
+        except DuplicateInvoiceError:
+            # Orion already has this Cloud Invoice No, almost always because an
+            # earlier run posted it successfully but then failed on a later
+            # invoice before the checkpoint could advance. Not a real problem:
+            # treat it the same as a success for checkpoint purposes and move on,
+            # rather than aborting the whole tenant on an invoice that's already
+            # correctly in Orion.
+            log(f"[{tenant_name}] [DUPLICATE] invoice {invoice_id} ({code}) already exists in Orion, skipping.")
+            duplicates += 1
+            latest_updated_at = invoice["updatedAt"]
+            continue
+
         log(f"[{tenant_name}] [OK] invoice {invoice_id} -> {result}")
         processed += 1
         latest_updated_at = invoice["updatedAt"]
 
     state["last_updated_at"] = latest_updated_at
     save_state(tenant_name, state)
-    log(f"[{tenant_name}] done. processed={processed} skipped={skipped} last_updated_at={latest_updated_at}")
+    log(f"[{tenant_name}] done. processed={processed} skipped={skipped} duplicates={duplicates} "
+        f"last_updated_at={latest_updated_at}")
     return processed, skipped
 
 
