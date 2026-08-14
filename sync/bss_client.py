@@ -49,6 +49,17 @@ class BSSClient:
         resp.raise_for_status()
         return resp.json()
 
+    def _put(self, path, json_body):
+        url = f"{self.base_url}{path}"
+        headers = {"Authorization": f"Bearer {self._token()}", "X-Api-Version": self.api_version}
+        resp = requests.put(url, json=json_body, headers=headers, timeout=30)
+        if resp.status_code == 401:
+            self._fetch_token()
+            headers = {"Authorization": f"Bearer {self._token()}", "X-Api-Version": self.api_version}
+            resp = requests.put(url, json=json_body, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
     def iter_invoices(self, updated_since=None, page_size=100):
         """Yields invoice dicts (with items + customFields expanded), paginating through all results.
 
@@ -77,3 +88,13 @@ class BSSClient:
 
     def get_account(self, account_id):
         return self._get(f"/api/accounts/{account_id}")
+
+    def set_invoice_custom_field(self, invoice_id, field_id, value):
+        """PUT /api/invoices/{invoiceId}/customfields. Writes one custom field
+        value onto a BSS invoice. Used to record Orion's DocumentNo back onto the
+        BSS invoice it came from, once main.py has confirmed it was created. The
+        field itself must already exist in BSS (created once via the setup portal,
+        with "Use this field for displaying data of other system" left UNCHECKED;
+        that setting makes the field API-read-only, confirmed 2026-08-14 via a
+        403 CustomFieldReadOnlyError)."""
+        return self._put(f"/api/invoices/{invoice_id}/customfields", [{"id": field_id, "value": value}])

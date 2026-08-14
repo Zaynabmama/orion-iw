@@ -92,6 +92,10 @@ def sync_tenant(tenant_config, orion_client, log):
     latest_updated_at = state["last_updated_at"]
 
     invoice_prefix = orion_config.get("invoice_prefix")
+    # Optional: this tenant's BSS custom field ID for writing Orion's DocumentNo
+    # back onto the invoice it came from, once created. Not set = skipped silently
+    # (most tenants don't have this field set up yet).
+    orion_invoice_number_field_id = bss.get("orion_invoice_number_field_id")
 
     for invoice in client.iter_invoices(updated_since=state["last_updated_at"]):
         invoice_id = invoice["id"]
@@ -146,6 +150,18 @@ def sync_tenant(tenant_config, orion_client, log):
             continue
 
         log(f"[{tenant_name}] [OK] invoice {invoice_id} -> {result}")
+
+        if orion_invoice_number_field_id and result.get("mode") == "posted":
+            document_no = (result.get("response") or {}).get("DocumentNo")
+            if document_no:
+                try:
+                    client.set_invoice_custom_field(invoice_id, orion_invoice_number_field_id, str(document_no))
+                except Exception as e:
+                    # Non-fatal: the Orion invoice is already created either way,
+                    # this is just a traceability annotation back on the BSS side.
+                    log(f"[{tenant_name}] [WARN] invoice {invoice_id}: could not write "
+                        f"Orion Invoice Number back to BSS: {type(e).__name__}: {e}")
+
         processed += 1
         latest_updated_at = invoice["updatedAt"]
 
