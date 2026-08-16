@@ -81,22 +81,26 @@ class OrionClient:
             self._login()
             headers = {**self._headers(), "Content-Type": "application/json"}
             resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        if not resp.ok:
-            # Orion returns this as a 400 when the same "Cloud Invoice No" was
-            # already posted in an earlier run (e.g. one that died partway through
-            # a batch, since the sync checkpoint only advances after a whole
-            # tenant's run finishes). That's not a real failure, the invoice is
-            # already in Orion, so it gets its own exception type: main.py treats
-            # it as a benign skip and keeps going, instead of aborting the batch.
+        if resp.status_code == 400:
+            # A 400 here means Orion evaluated this specific invoice's data and
+            # rejected it for a business reason (duplicate Cloud Invoice No, a
+            # date rule, etc.), not a connection or auth problem. Every other
+            # invoice in the batch is unaffected, so this raises a per-invoice
+            # error instead of the generic HTTPError below, letting main.py log
+            # it and move on to the next invoice.
             try:
                 body = resp.json()
             except ValueError:
                 body = {}
-            if "duplicate" in str(body.get("Response", "")).lower():
-                raise DuplicateInvoiceError(body.get("Response", ""), response=body)
-            # raise_for_status()'s default message drops the response body, which is
-            # exactly where Orion puts the actual validation error on a 400. Surface
-            # it instead of just "400 Client Error".
+            reason = body.get("Response", "") or resp.text
+            if "duplicate" in str(reason).lower():
+                raise DuplicateInvoiceError(reason, response=body)
+            raise InvoiceRejectedError(reason, response=body)
+        if not resp.ok:
+            # Anything other than 400 (401 still failing after a retry, 403,
+            # 5xx, ...) means Orion itself has a problem, not this one invoice.
+            # Every other invoice would fail the same way, so this still aborts
+            # the whole batch instead of retrying each one individually.
             raise requests.HTTPError(
                 f"{resp.status_code} {resp.reason} for {url}. Response body: {resp.text}",
                 response=resp,
@@ -107,6 +111,16 @@ class OrionClient:
 class DuplicateInvoiceError(Exception):
     """Raised when Orion rejects a create because that Cloud Invoice No already
     exists there. response: Orion's parsed JSON body."""
+
+    def __init__(self, message, response=None):
+        super().__init__(message)
+        self.response = response
+
+
+class InvoiceRejectedError(Exception):
+    """Raised when Orion rejects one specific invoice's data for any reason
+    other than a duplicate (a date rule, a field validation rule, etc.).
+    response: Orion's parsed JSON body."""
 
     def __init__(self, message, response=None):
         super().__init__(message)
