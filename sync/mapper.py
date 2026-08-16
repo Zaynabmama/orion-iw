@@ -31,7 +31,7 @@ build_orion_payload() per call, sourced from that tenant's config file
 (see tenants/_template.json and main.py).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 
 def _parse(iso_datetime_str):
@@ -180,7 +180,14 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
     # posts to Orion, not the original BSS invoice date. Confirmed with the user
     # 2026-08-14 after Orion rejected a backdated invoice with "Invoice Date cannot
     # be less than today's date". Same value as "Created date" below.
-    posting_dt = run_date or datetime.now(timezone.utc)
+    #
+    # Deliberately local (naive), not UTC: fixed 2026-08-16 after the same "cannot
+    # be less than today" rejection recurred at 2 AM Saudi time (UTC+3), where
+    # datetime.now(timezone.utc) still reads as 23:00 the PREVIOUS day. Orion
+    # evaluates "today" against local wall-clock time, so this must match that,
+    # not UTC. Relies on the server's own clock being set to the correct local
+    # timezone (confirmed true for the deployment machine).
+    posting_dt = run_date or datetime.now()
     ship_address = f"{customer_code}-B"
     bill_address = ship_address  # same formula as ShipAddress in every real sample seen.
 
@@ -280,7 +287,9 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             "Foreign currency value": fc_value,
             "Discount percentage": _num(discount_pct),
             "FC actual value": fc_actual,
-            "Created date": format_date_slash(run_date or datetime.now(timezone.utc)),
+            # Reuses posting_dt (computed once above) rather than a second
+            # separate "now" call, so header and item dates can never disagree.
+            "Created date": format_date_slash(posting_dt),
             # NB: "SubcriptionID" (missing the 's' in "Subscription") is the exact
             # spelling in the real sample, kept as-is since it's presumably the
             # literal field name Orion's API expects.
