@@ -112,6 +112,20 @@ def sync_tenant(tenant_config, orion_client, log):
             skipped += 1
             continue
 
+        # Only debit invoices are synced. Credit notes (BSS invoice.type.type ==
+        # "Credit") carry positive amounts in BSS just like debit invoices, so
+        # without this check they'd get pushed to Orion as an ordinary sale
+        # instead of a credit, which is wrong. Found 2026-08-17 via a real credit
+        # note (DNSA-26-003834) that got pushed before this check existed; the
+        # user removed that one from Orion manually. Per the user, only debit
+        # invoices should sync for now.
+        invoice_type = (invoice.get("type") or {}).get("type")
+        if invoice_type != "Debit":
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): type is "
+                f"{invoice_type!r}, not a debit invoice. Not synced.")
+            skipped += 1
+            continue
+
         # Mindware bills the partner (billingTo), not the end customer (account).
         # That's the account whose `code` becomes Orion's "Customer code" field.
         billing_id = (invoice.get("billingTo") or invoice["account"])["id"]
