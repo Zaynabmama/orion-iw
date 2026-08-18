@@ -296,11 +296,16 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             "SubcriptionID": sub_id,
             "Billing Start Date": format_date_mon2y(start_dt) if start_dt else "",
             "Billing End Date": format_date_mon2y(end_dt) if end_dt else "",
-            # Confirmed with the user (2026-08-11): despite the field's name, this is
-            # the LINE'S TOTAL cost (BSS totalCost), not a per-unit price. Sent as a
-            # string to match the real sample's "Unit Cost Price": "2.28" (a string,
-            # unlike the numeric fields around it).
-            "Unit Cost Price": f"{item['totalCost'] * usd_to_local:.2f}" if item.get("totalCost") is not None else "",
+            # RESOLVED 2026-08-18, supersedes the 2026-08-11 answer: this is the
+            # per-unit cost (BSS unitCost), matching the field's own name and the
+            # same per-unit pattern as "Item Rate". Confirmed against a real
+            # Triennial-installment invoice (DNSA-26-003802): unitCost (1614.18
+            # USD) x exchangeRate (3.75) = 6053.18, which the user confirmed is
+            # the correct value; the old totalCost-based formula gave 42372.23,
+            # which was wrong. Sent as a string to match the real sample's
+            # "Unit Cost Price": "2.28" (a string, unlike the numeric fields
+            # around it).
+            "Unit Cost Price": f"{item['unitCost'] * usd_to_local:.2f}" if item.get("unitCost") is not None else "",
             "Item Taxes": [
                 {
                     # "R" is the only value seen so far (rate-based?); meaning unconfirmed.
