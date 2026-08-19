@@ -88,6 +88,7 @@ class UnhandledDiscountError(Exception):
 KEYWORD_MAP = {
     ("windows server", "window server", "Office LTSC Standard", "MSPER-CNS"): "MSPER-CNS",
     ("azure subscription", "MSAZ-CNS"): "MSAZ-CNS",
+    ("azure prepayment", "MSAZ-CNS"): "MSAZ-CNS",
     ("google workspace", "GL-WSP-CNS"): "GL-WSP-CNS",
     ("m365", "microsoft 365", "office 365", "exchange online", "Microsoft Defender for Endpoint P1", "MS-CNS"): "MS-CNS",
     ("POWERPLATFORM - Power Apps Premium (New Commerce)", "powerapps premium", "power apps premium", "Power Apps Premium", "MS-CNS"): "MS-CNS",
@@ -267,6 +268,13 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         # line by 87.50 SAR if the total were derived from the rounded Rate instead
         # of computed directly like this.
         precise_rate = item["unitPrice"] * usd_to_local
+        # Manual debit-note lines (no linked BSS product/subscription/asset, e.g.
+        # DNSA-26-003908 "AZURE PREPAYMENT", DNSA-26-003904's SQL/Windows Server
+        # lines) are typed in by the team without a separate cost entry, so BSS's
+        # unitCost comes back 0 even though a real price was charged. Confirmed
+        # with the user 2026-08-19: fall back to the sell price (unitPrice) as
+        # the cost for these, rather than sending "0.00".
+        unit_cost_usd = item.get("unitCost") or item["unitPrice"]
         quantity = item["quantity"]
         fc_value = round(precise_rate * quantity, 2)
         discount_pct = (item.get("discount") or {}).get("value") or 0
@@ -297,7 +305,10 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             # NB: "SubcriptionID" (missing the 's' in "Subscription") is the exact
             # spelling in the real sample, kept as-is since it's presumably the
             # literal field name Orion's API expects.
-            "SubcriptionID": sub_id,
+            # Confirmed with the user 2026-08-19: lines with no real BSS
+            # subscription (perpetual/manual lines) send the literal string
+            # "Subs ID" here instead of leaving it empty.
+            "SubcriptionID": sub_id or "Subs ID",
             "Billing Start Date": format_date_mon2y(start_dt) if start_dt else "",
             "Billing End Date": format_date_mon2y(end_dt) if end_dt else "",
             # RESOLVED 2026-08-18, supersedes the 2026-08-11 answer: this is the
@@ -309,7 +320,7 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             # which was wrong. Sent as a string to match the real sample's
             # "Unit Cost Price": "2.28" (a string, unlike the numeric fields
             # around it).
-            "Unit Cost Price": f"{item['unitCost'] * usd_to_local:.2f}" if item.get("unitCost") is not None else "",
+            "Unit Cost Price": f"{unit_cost_usd * usd_to_local:.2f}",
             "Item Taxes": [
                 {
                     # "R" is the only value seen so far (rate-based?); meaning unconfirmed.

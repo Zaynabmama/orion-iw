@@ -126,6 +126,18 @@ def sync_tenant(tenant_config, orion_client, log):
             skipped += 1
             continue
 
+        # A BSS invoice can be cancelled after creation (invoice.status.type ==
+        # "Canceled", confirmed 2026-08-19 via real data, e.g. DNSA-26-003891:
+        # created 2026-08-17, cancelled 2026-08-18). Nothing upstream of this
+        # filtered on status before, so a cancelled invoice would otherwise sync
+        # into Orion like any other.
+        invoice_status = (invoice.get("status") or {}).get("type")
+        if invoice_status == "Canceled":
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): status is "
+                f"Canceled in BSS. Not synced.")
+            skipped += 1
+            continue
+
         # Mindware bills the partner (billingTo), not the end customer (account).
         # That's the account whose `code` becomes Orion's "Customer code" field.
         billing_id = (invoice.get("billingTo") or invoice["account"])["id"]
