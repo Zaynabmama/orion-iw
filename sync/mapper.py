@@ -108,6 +108,7 @@ KEYWORD_MAP = {
     ("acronis", "AS-CNS"): "AS-CNS",
     ("windows 11 pro", "MSPER-CNS"): "MSPER-CNS",
     ("windows 11 iot enterprise", "MSPER-CNS"): "MSPER-CNS",
+    ("windows 10 iot enterprise", "MSPER-CNS"): "MSPER-CNS",
     ("power bi", "MS-CNS"): "MS-CNS",
     ("planner", "project plan", "MS-CNS"): "MS-CNS",
     ("power automate premium", "MS-CNS"): "MS-CNS",
@@ -169,7 +170,10 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             f"or add a \"_default\" entry if every partner in this tenant uses the same salesman."
         )
 
-    customer_code = (billing_account or {}).get("code")
+    # .strip(): BSS account codes have been seen with stray leading/trailing
+    # whitespace (e.g. "CK1E0177 "), which Orion's exact-match customer lookup
+    # rejects as "Customer not found" even though the customer exists there.
+    customer_code = ((billing_account or {}).get("code") or "").strip() or None
     if not customer_code:
         raise MissingCustomerCodeError(
             f"BSS billing account id {billing_id} ({billing_ref.get('name')}) has no "
