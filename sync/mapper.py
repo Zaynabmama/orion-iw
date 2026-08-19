@@ -349,10 +349,9 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         "End User Details": end_user_details,
         "Inco Terms": orion_config["ship_mode"],
         # BSS invoice number, also the natural dedupe key (Orion should reject a
-        # second POST carrying the same Cloud Invoice No). The real sample has a
-        # "-1" suffix on this field (e.g. "DNAE-26-006948-1") whose meaning is
-        # unconfirmed and not reproduced here; see conversation notes.
-        "Cloud Invoice No": invoice.get("code", ""),
+        # second POST carrying the same Cloud Invoice No). Confirmed with the user
+        # 2026-08-19: append a trailing "-" (e.g. "DNSA-26-003934-").
+        "Cloud Invoice No": invoice.get("code", "") + "-",
         # Mode Of Payment/Payment Mode: still open questions. The real sample
         # showed "OC"/"5" for that invoice's own payment method, not a fixed
         # constant, contradicting the earlier assumption that this is always
