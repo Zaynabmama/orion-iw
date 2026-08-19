@@ -173,16 +173,26 @@ def sync_tenant(tenant_config, orion_client, log):
 
         log(f"[{tenant_name}] [OK] invoice {invoice_id} -> {result}")
 
-        if orion_invoice_number_field_id and result.get("mode") == "posted":
-            document_no = (result.get("response") or {}).get("DocumentNo")
-            if document_no:
-                try:
-                    client.set_invoice_custom_field(invoice_id, orion_invoice_number_field_id, str(document_no))
-                except Exception as e:
-                    # Non-fatal: the Orion invoice is already created either way,
-                    # this is just a traceability annotation back on the BSS side.
-                    log(f"[{tenant_name}] [WARN] invoice {invoice_id}: could not write "
-                        f"Orion Invoice Number back to BSS: {type(e).__name__}: {e}")
+        if result.get("mode") == "posted":
+            if not orion_invoice_number_field_id:
+                log(f"[{tenant_name}] [FIELD-SKIP] invoice {invoice_id}: "
+                    f"orion_invoice_number_field_id not configured for this tenant, not writing back.")
+            else:
+                document_no = (result.get("response") or {}).get("DocumentNo")
+                if not document_no:
+                    log(f"[{tenant_name}] [WARN] invoice {invoice_id}: Orion response had no "
+                        f"DocumentNo to write back: {result.get('response')}")
+                else:
+                    try:
+                        client.set_invoice_custom_field(invoice_id, orion_invoice_number_field_id, str(document_no))
+                    except Exception as e:
+                        # Non-fatal: the Orion invoice is already created either way,
+                        # this is just a traceability annotation back on the BSS side.
+                        log(f"[{tenant_name}] [WARN] invoice {invoice_id}: could not write "
+                            f"Orion Invoice Number back to BSS: {type(e).__name__}: {e}")
+                    else:
+                        log(f"[{tenant_name}] [FIELD] invoice {invoice_id}: wrote Orion Invoice "
+                            f"Number {document_no!r} back to BSS field {orion_invoice_number_field_id}.")
 
         processed += 1
         latest_updated_at = invoice["updatedAt"]
