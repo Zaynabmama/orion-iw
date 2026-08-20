@@ -17,6 +17,15 @@ from datetime import datetime, timezone
 import requests
 
 OUTBOX_ROOT = os.path.join(os.path.dirname(__file__), "outbox")
+POST_AUDIT_ROOT = os.path.join(OUTBOX_ROOT, "orion_post_audit")
+
+
+def _write_post_audit(stamp, suffix, content):
+    os.makedirs(POST_AUDIT_ROOT, exist_ok=True)
+    path = os.path.join(POST_AUDIT_ROOT, f"{stamp}_{suffix}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(content, f, indent=2)
+    return path
 
 
 def _decode_jwt_exp(token):
@@ -75,12 +84,37 @@ class OrionClient:
         """POST /api/invoices/data. Returns the response dict, e.g.
         {"Success": "True", "SysID": ..., "DocumentNo": ..., ...}."""
         url = f"{self.base_url}/api/invoices/data"
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        cloud_invoice_no = payload.get("Cloud Invoice No", "unknown")
+        audit_prefix = "".join(char if char.isalnum() or char in "-_" else "_"
+                                 for char in cloud_invoice_no)
+        request_audit_path = _write_post_audit(
+            stamp,
+            f"{audit_prefix}_request",
+            {
+                "url": url,
+                "cloud_invoice_no": cloud_invoice_no,
+                "item_count": len(payload.get("Items", [])),
+                "payload": payload,
+            },
+        )
         headers = {**self._headers(), "Content-Type": "application/json"}
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
         if resp.status_code == 401:
             self._login()
             headers = {**self._headers(), "Content-Type": "application/json"}
             resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        _write_post_audit(
+            stamp,
+            f"{audit_prefix}_response",
+            {
+                "request_audit": request_audit_path,
+                "cloud_invoice_no": cloud_invoice_no,
+                "item_count_sent": len(payload.get("Items", [])),
+                "status_code": resp.status_code,
+                "response": resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text,
+            },
+        )
         if resp.status_code == 400:
             # A 400 here means Orion evaluated this specific invoice's data and
             # rejected it for a business reason (duplicate Cloud Invoice No, a
