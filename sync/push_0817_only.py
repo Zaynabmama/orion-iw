@@ -33,6 +33,14 @@ LOGS_DIR = os.path.join(SYNC_DIR, "logs")
 DATE_FILTER = "invoiceDate ge datetime'2026-08-17T00:00:00' and invoiceDate lt datetime'2026-08-18T00:00:00'"
 TARGET_CODE = os.environ.get("PUSH_ONLY_CODE")
 OVERRIDE_CLOUD_INVOICE_NO = os.environ.get("PUSH_CLOUD_INVOICE_NO")
+SUPPLEMENTARY_MODE = os.environ.get("PUSH_SUPPLEMENTARY") == "1"
+SUPPLEMENTARY_ITEMS = {
+    "DNSA-26-003899": [1],
+    "DNSA-26-003904": [1, 2, 3],
+    "DNSA-26-003887": [1, 2],
+    "DNSA-26-003886": [1],
+    "DNSA-26-003906": [1],
+}
 
 
 def main():
@@ -89,6 +97,8 @@ def main():
         invoice_id = invoice["id"]
         code = invoice.get("code") or ""
 
+        if SUPPLEMENTARY_MODE and code not in SUPPLEMENTARY_ITEMS:
+            continue
         if TARGET_CODE and code != TARGET_CODE:
             continue
 
@@ -126,6 +136,20 @@ def main():
             log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): {e}")
             skipped += 1
             continue
+
+        if SUPPLEMENTARY_MODE:
+            selected_indexes = SUPPLEMENTARY_ITEMS[code]
+            if max(selected_indexes, default=-1) >= len(payload["Items"]):
+                log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): "
+                    f"expected missing item indexes {selected_indexes}, but payload has "
+                    f"{len(payload['Items'])} items.")
+                skipped += 1
+                continue
+            payload["Items"] = [payload["Items"][index] for index in selected_indexes]
+            payload["Cloud Invoice No"] = f"{code}-01"
+            log(f"[ksa_production] [SUPPLEMENTARY] invoice {invoice_id} ({code}): "
+                f"selected item indexes {selected_indexes}; Cloud Invoice No -> "
+                f"{payload['Cloud Invoice No']}")
 
         if OVERRIDE_CLOUD_INVOICE_NO and code == TARGET_CODE:
             payload["Cloud Invoice No"] = OVERRIDE_CLOUD_INVOICE_NO
