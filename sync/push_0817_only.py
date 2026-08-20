@@ -31,6 +31,7 @@ SYNC_DIR = os.path.dirname(__file__)
 LOGS_DIR = os.path.join(SYNC_DIR, "logs")
 
 DATE_FILTER = "invoiceDate ge datetime'2026-08-17T00:00:00' and invoiceDate lt datetime'2026-08-18T00:00:00'"
+TARGET_CODE = os.environ.get("PUSH_ONLY_CODE")
 
 
 def main():
@@ -86,6 +87,9 @@ def main():
     for invoice in invoices:
         invoice_id = invoice["id"]
         code = invoice.get("code") or ""
+
+        if TARGET_CODE and code != TARGET_CODE:
+            continue
 
         if invoice_prefix and not code.startswith(invoice_prefix):
             log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): prefix mismatch.")
