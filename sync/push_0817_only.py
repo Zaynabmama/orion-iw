@@ -32,6 +32,7 @@ LOGS_DIR = os.path.join(SYNC_DIR, "logs")
 
 DATE_FILTER = "invoiceDate ge datetime'2026-08-17T00:00:00' and invoiceDate lt datetime'2026-08-18T00:00:00'"
 TARGET_CODE = os.environ.get("PUSH_ONLY_CODE")
+OVERRIDE_CLOUD_INVOICE_NO = os.environ.get("PUSH_CLOUD_INVOICE_NO")
 
 
 def main():
@@ -125,6 +126,11 @@ def main():
             log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): {e}")
             skipped += 1
             continue
+
+        if OVERRIDE_CLOUD_INVOICE_NO and code == TARGET_CODE:
+            payload["Cloud Invoice No"] = OVERRIDE_CLOUD_INVOICE_NO
+            log(f"[ksa_production] [OVERRIDE] invoice {invoice_id} ({code}): "
+                f"Cloud Invoice No -> {OVERRIDE_CLOUD_INVOICE_NO}")
 
         try:
             result_push = push_payload(payload, invoice_id, "ksa_production", orion_client=orion_client)
