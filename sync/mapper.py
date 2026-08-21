@@ -210,7 +210,7 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             if gf.get("name") == "LPO number":
                 values = gf.get("values") or []
                 if values and values[0].get("value"):
-                    lpo_number = str(values[0]["value"])
+                    lpo_number = str(values[0]["value"])[:29]
 
     payment_method = invoice.get("paymentMethod") or {}
     terms_code = payment_term_map.get(payment_method.get("id"))
