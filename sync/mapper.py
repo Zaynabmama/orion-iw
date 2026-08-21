@@ -108,7 +108,7 @@ KEYWORD_MAP = {
     ("Azure Plan Reserved Instances", "azure plan reserved instances", "MSRI-CNS"): "MSRI-CNS",
     ("acronis", "AS-CNS"): "AS-CNS",
     ("windows 11 pro", "MSPER-CNS"): "MSPER-CNS",
-    ("windows 365", "MSPER-CNS"): "MSPER-CNS",
+    ("windows 365", "MS-CNS"): "MS-CNS",
     ("windows 11 iot enterprise", "MSPER-CNS"): "MSPER-CNS",
     ("windows 10 iot enterprise", "MSPER-CNS"): "MSPER-CNS",
     ("power bi", "MS-CNS"): "MS-CNS",
