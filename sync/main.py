@@ -138,6 +138,22 @@ def sync_tenant(tenant_config, orion_client, log):
             skipped += 1
             continue
 
+        skip_product_keywords = orion_config.get("skip_product_keywords", [])
+        invoice_product_names = [
+            (item.get("product") or {}).get("name") or item.get("description") or ""
+            for item in invoice.get("items") or []
+        ]
+        matched_skip_keyword = next(
+            (keyword for keyword in skip_product_keywords
+             if any(keyword.lower() in name.lower() for name in invoice_product_names)),
+            None,
+        )
+        if matched_skip_keyword:
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): product matches "
+                f"configured skip keyword {matched_skip_keyword!r}. Not synced.")
+            skipped += 1
+            continue
+
         # Mindware bills the partner (billingTo), not the end customer (account).
         # That's the account whose `code` becomes Orion's "Customer code" field.
         billing_id = (invoice.get("billingTo") or invoice["account"])["id"]
