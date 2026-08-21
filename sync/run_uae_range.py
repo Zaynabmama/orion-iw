@@ -15,6 +15,7 @@ class DateRangeBSSClient(BSSClient):
         super().__init__(*args, **kwargs)
         self.start_date = start_date
         self.end_date = end_date
+        self.invoice_code = None
 
     def iter_invoices(self, updated_since=None, page_size=100):
         page_index = 1
@@ -32,7 +33,9 @@ class DateRangeBSSClient(BSSClient):
             invoices = result.get("data", [])
             if not invoices:
                 break
-            yield from invoices
+            for invoice in invoices:
+                if self.invoice_code is None or invoice.get("code") == self.invoice_code:
+                    yield invoice
             paging = result.get("paging") or {}
             if page_index >= paging.get("totalPages", page_index):
                 break
@@ -43,6 +46,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Sync UAE invoices for an invoice-date range.")
     parser.add_argument("--start", required=True, help="Inclusive invoice date, YYYY-MM-DD")
     parser.add_argument("--end", required=True, help="Exclusive invoice date, YYYY-MM-DD")
+    parser.add_argument("--code", help="Process only this exact invoice code")
     return parser.parse_args()
 
 
@@ -56,6 +60,7 @@ def main_run():
     class ConfiguredDateRangeBSSClient(DateRangeBSSClient):
         def __init__(self, *client_args, **client_kwargs):
             super().__init__(*client_args, start_date=args.start, end_date=args.end, **client_kwargs)
+            self.invoice_code = args.code
 
     main.BSSClient = ConfiguredDateRangeBSSClient
     orion = OrionClient(
@@ -64,7 +69,8 @@ def main_run():
         os.environ["ORION_PASSWORD"],
     )
 
-    print(f"Running UAE invoices from {args.start} through the day before {args.end}")
+    scope = f" for {args.code}" if args.code else ""
+    print(f"Running UAE invoices from {args.start} through the day before {args.end}{scope}")
     result = main.sync_tenant(config, orion, print)
     print("UAE RUN RESULT:", result)
 
