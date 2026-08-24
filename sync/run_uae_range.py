@@ -16,6 +16,7 @@ class DateRangeBSSClient(BSSClient):
         self.start_date = start_date
         self.end_date = end_date
         self.invoice_code = None
+        self.seen_invoice_ids = set()
 
     def iter_invoices(self, updated_since=None, page_size=100):
         page_index = 1
@@ -24,7 +25,7 @@ class DateRangeBSSClient(BSSClient):
                 "pageIndex": page_index,
                 "pageSize": page_size,
                 "include": "items,customFields",
-                "$orderBy": "invoiceDate asc",
+                "$orderBy": "updatedAt asc",
                 "$filter": (
                     f"invoiceDate ge datetime'{self.start_date}T00:00:00' "
                     f"and invoiceDate lt datetime'{self.end_date}T00:00:00'"
@@ -34,6 +35,10 @@ class DateRangeBSSClient(BSSClient):
             if not invoices:
                 break
             for invoice in invoices:
+                invoice_id = invoice.get("id")
+                if invoice_id in self.seen_invoice_ids:
+                    continue
+                self.seen_invoice_ids.add(invoice_id)
                 if self.invoice_code is None or invoice.get("code") == self.invoice_code:
                     yield invoice
             paging = result.get("paging") or {}
