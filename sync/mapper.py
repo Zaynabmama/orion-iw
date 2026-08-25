@@ -99,6 +99,7 @@ KEYWORD_MAP = {
     ("Project Professional 2024 (Commercial) (Subs ID)", "project professional 2024", "MSPER-CNS"): "MSPER-CNS",
     ("SQL Server 2025 - 1 User CAL (Commercial)", "sql server 2025 - 1 user cal", "MSPER-CNS"): "MSPER-CNS",
     ("SQL Server 2025 Enterprise core - 2 core License Pack (Commercial)", "sql server 2025 enterprise core", "MSPER-CNS"): "MSPER-CNS",
+    ("SQL Server 2025 Enterprise - 2 core License Pack - 3 year", "sql server 2025 enterprise - 2 core license pack - 3 year", "MSPER-CNS"): "MSPER-CNS",
     # Not in the source script's map either (a gap there too), seen on real KSA invoices
     # 2026-08-10; every other SQL Server 2025 product maps to MSPER-CNS.
     ("SQL Server 2025 Standard core - 2 core License Pack (Commercial)", "sql server 2025 standard core", "MSPER-CNS"): "MSPER-CNS",
