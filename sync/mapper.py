@@ -364,9 +364,8 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         "End User Details": end_user_details,
         "Inco Terms": orion_config["ship_mode"],
         # BSS invoice number, also the natural dedupe key (Orion should reject a
-        # second POST carrying the same Cloud Invoice No). Confirmed with the user
-        # 2026-08-19: append a trailing "-" (e.g. "DNSA-26-003934-").
-        "Cloud Invoice No": invoice.get("code", "") + "-",
+        # second POST carrying the same Cloud Invoice No).
+        "Cloud Invoice No": invoice.get("code", ""),
         # Mode Of Payment/Payment Mode: the real sample showed "OC"/"5" for that
         # invoice's own payment method. Orion started rejecting an empty
         # "Payment Mode" as a mandatory field 2026-08-20, so both are now sent
