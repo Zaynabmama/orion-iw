@@ -325,6 +325,11 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             # "Unit Cost Price": "2.28" (a string, unlike the numeric fields
             # around it).
             "Unit Cost Price": f"{unit_cost_usd * usd_to_local:.2f}",
+            # Tenants with no TED/tax code configured (e.g. kuwait) genuinely have
+            # none to send, not a data gap to fill in. Sending a rate-based tax
+            # entry with a blank "TED code" gets rejected by Orion ("TED
+            # Validation Failed : OP-50510", confirmed 2026-08-26 on a real
+            # kuwait invoice), so omit the tax entry entirely instead.
             "Item Taxes": [
                 {
                     # "R" is the only value seen so far (rate-based?); meaning unconfirmed.
@@ -335,7 +340,7 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
                     "itedNetLcAmt": net_lc,
                     "TED code": tax_code,
                 }
-            ],
+            ] if tax_code else [],
         })
 
     end_country = ((end_customer_account or {}).get("country") or {}).get("name", "")
