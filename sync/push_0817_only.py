@@ -30,7 +30,16 @@ from orion_client import DuplicateInvoiceError, InvoiceRejectedError, OrionClien
 SYNC_DIR = os.path.dirname(__file__)
 LOGS_DIR = os.path.join(SYNC_DIR, "logs")
 
-DATE_FILTER = "invoiceDate ge datetime'2026-08-17T00:00:00' and invoiceDate lt datetime'2026-08-18T00:00:00'"
+def _date_filter():
+    from datetime import datetime as _dt, timedelta as _td
+    date_str = os.environ.get("PUSH_DATE", "2026-08-17")
+    start = _dt.strptime(date_str, "%Y-%m-%d")
+    end = start + _td(days=1)
+    return (f"invoiceDate ge datetime'{start:%Y-%m-%d}T00:00:00' "
+            f"and invoiceDate lt datetime'{end:%Y-%m-%d}T00:00:00'")
+
+
+DATE_FILTER = _date_filter()
 TARGET_CODE = os.environ.get("PUSH_ONLY_CODE")
 OVERRIDE_CLOUD_INVOICE_NO = os.environ.get("PUSH_CLOUD_INVOICE_NO")
 SUPPLEMENTARY_MODE = os.environ.get("PUSH_SUPPLEMENTARY") == "1"
@@ -88,7 +97,7 @@ def main():
         "$filter": DATE_FILTER,
     })
     invoices = result.get("data", [])
-    log(f"[ksa_production] Pulled {len(invoices)} invoices dated 2026-08-17 from BSS.\n")
+    log(f"[ksa_production] Pulled {len(invoices)} invoices dated {os.environ.get('PUSH_DATE', '2026-08-17')} from BSS.\n")
 
     account_cache = {}
     processed = skipped = duplicates = rejected = 0
