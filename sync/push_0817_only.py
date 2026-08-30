@@ -34,7 +34,13 @@ def _date_filter():
     from datetime import datetime as _dt, timedelta as _td
     date_str = os.environ.get("PUSH_DATE", "2026-08-17")
     start = _dt.strptime(date_str, "%Y-%m-%d")
-    end = start + _td(days=1)
+    end_date_str = os.environ.get("PUSH_DATE_END")
+    if end_date_str:
+        # Inclusive end date: PUSH_DATE=2026-08-26 PUSH_DATE_END=2026-08-31
+        # covers invoices dated 26th through 31st.
+        end = _dt.strptime(end_date_str, "%Y-%m-%d") + _td(days=1)
+    else:
+        end = start + _td(days=1)
     return (f"invoiceDate ge datetime'{start:%Y-%m-%d}T00:00:00' "
             f"and invoiceDate lt datetime'{end:%Y-%m-%d}T00:00:00'")
 
@@ -97,7 +103,10 @@ def main():
         "$filter": DATE_FILTER,
     })
     invoices = result.get("data", [])
-    log(f"[ksa_production] Pulled {len(invoices)} invoices dated {os.environ.get('PUSH_DATE', '2026-08-17')} from BSS.\n")
+    _date_range = os.environ.get('PUSH_DATE', '2026-08-17')
+    if os.environ.get('PUSH_DATE_END'):
+        _date_range += f" to {os.environ['PUSH_DATE_END']}"
+    log(f"[ksa_production] Pulled {len(invoices)} invoices dated {_date_range} from BSS.\n")
 
     account_cache = {}
     processed = skipped = duplicates = rejected = 0
