@@ -1,13 +1,22 @@
-"""One-off, targeted push for the 2026-08-17 KSA batch only.
+"""One-off, targeted push for a specific date range, across multiple tenants.
 
-Unlike main.py, this does NOT read or write state/ksa_production.json, so it
-has no effect on the regular incremental sync's checkpoint. Run this once for
-the 17/08 batch (the invoices deleted from Orion and being re-pushed with the
-new "Cloud Invoice No" trailing "-" suffix), separately from any normal
-nightly/manual main.py run.
+Unlike main.py, this does NOT read or write state/<tenant>.json, so it has no
+effect on the regular incremental sync's checkpoint for any tenant. Originally
+built for the 2026-08-17 KSA batch only (the invoices deleted from Orion and
+re-pushed); extended 2026-08-31 to cover a date range and loop over multiple
+tenants (kuwait/freezone/uae, once those got real BSS credentials configured
+-- qatar/oman still don't, so they're excluded).
 
 Requires ORION_BASE_URL/ORION_USERNAME/ORION_PASSWORD in .env (real Orion
 network access), so this only works run from ZaynabM_Super's machine.
+
+Env vars:
+  PUSH_DATE       start date, YYYY-MM-DD (default 2026-08-17)
+  PUSH_DATE_END   optional inclusive end date, YYYY-MM-DD (single day if unset)
+  PUSH_TENANTS    optional comma-separated tenant list (default: ksa_production,kuwait,freezone,uae)
+  PUSH_ONLY_CODE  optional: restrict to one invoice code (any tenant)
+  PUSH_CLOUD_INVOICE_NO  optional: override Cloud Invoice No for PUSH_ONLY_CODE
+  PUSH_SUPPLEMENTARY=1   optional: ksa_production-only supplementary-items mode (see below)
 """
 
 import json
@@ -30,6 +39,22 @@ from orion_client import DuplicateInvoiceError, InvoiceRejectedError, OrionClien
 SYNC_DIR = os.path.dirname(__file__)
 LOGS_DIR = os.path.join(SYNC_DIR, "logs")
 
+DEFAULT_TENANTS = ["ksa_production", "kuwait", "freezone", "uae"]
+
+TARGET_CODE = os.environ.get("PUSH_ONLY_CODE")
+OVERRIDE_CLOUD_INVOICE_NO = os.environ.get("PUSH_CLOUD_INVOICE_NO")
+SUPPLEMENTARY_MODE = os.environ.get("PUSH_SUPPLEMENTARY") == "1"
+# ksa_production-only: re-push just specific missing line items from specific
+# invoices as a separate supplementary invoice (Cloud Invoice No suffixed "-01").
+SUPPLEMENTARY_ITEMS = {
+    "DNSA-26-003899": [1],
+    "DNSA-26-003904": [1, 2, 3],
+    "DNSA-26-003887": [1, 2],
+    "DNSA-26-003886": [1],
+    "DNSA-26-003906": [1],
+}
+
+
 def _date_filter():
     from datetime import datetime as _dt, timedelta as _td
     date_str = os.environ.get("PUSH_DATE", "2026-08-17")
@@ -46,36 +71,10 @@ def _date_filter():
 
 
 DATE_FILTER = _date_filter()
-TARGET_CODE = os.environ.get("PUSH_ONLY_CODE")
-OVERRIDE_CLOUD_INVOICE_NO = os.environ.get("PUSH_CLOUD_INVOICE_NO")
-SUPPLEMENTARY_MODE = os.environ.get("PUSH_SUPPLEMENTARY") == "1"
-SUPPLEMENTARY_ITEMS = {
-    "DNSA-26-003899": [1],
-    "DNSA-26-003904": [1, 2, 3],
-    "DNSA-26-003887": [1, 2],
-    "DNSA-26-003886": [1],
-    "DNSA-26-003906": [1],
-}
 
 
-def main():
-    load_dotenv(os.path.join(SYNC_DIR, ".env"))
-
-    log_lines = []
-
-    def log(msg):
-        print(msg)
-        log_lines.append(msg)
-
-    orion_base_url = os.environ.get("ORION_BASE_URL")
-    orion_username = os.environ.get("ORION_USERNAME")
-    orion_password = os.environ.get("ORION_PASSWORD")
-    if not (orion_base_url and orion_username and orion_password):
-        log("[ERROR] ORION_BASE_URL/ORION_USERNAME/ORION_PASSWORD not set in .env. Aborting, nothing pushed.")
-        return
-    orion_client = OrionClient(orion_base_url, orion_username, orion_password)
-
-    with open(os.path.join(SYNC_DIR, "tenants", "ksa_production.json"), encoding="utf-8") as f:
+def push_tenant(tenant_name, orion_client, log):
+    with open(os.path.join(SYNC_DIR, "tenants", f"{tenant_name}.json"), encoding="utf-8") as f:
         cfg = json.load(f)
 
     bss = cfg["bss"]
@@ -84,6 +83,10 @@ def main():
     account_config = cfg["account_config"]
     invoice_prefix = orion_config.get("invoice_prefix")
     orion_invoice_number_field_id = bss.get("orion_invoice_number_field_id")
+
+    if not bss.get("username"):
+        log(f"[{tenant_name}] [SKIP TENANT] no credentials configured yet.")
+        return 0, 0, 0, 0
 
     client = BSSClient(
         base_url=bss["base_url"],
@@ -103,10 +106,7 @@ def main():
         "$filter": DATE_FILTER,
     })
     invoices = result.get("data", [])
-    _date_range = os.environ.get('PUSH_DATE', '2026-08-17')
-    if os.environ.get('PUSH_DATE_END'):
-        _date_range += f" to {os.environ['PUSH_DATE_END']}"
-    log(f"[ksa_production] Pulled {len(invoices)} invoices dated {_date_range} from BSS.\n")
+    log(f"[{tenant_name}] Pulled {len(invoices)} invoices from BSS.\n")
 
     account_cache = {}
     processed = skipped = duplicates = rejected = 0
@@ -115,25 +115,41 @@ def main():
         invoice_id = invoice["id"]
         code = invoice.get("code") or ""
 
-        if SUPPLEMENTARY_MODE and code not in SUPPLEMENTARY_ITEMS:
+        if SUPPLEMENTARY_MODE and (tenant_name != "ksa_production" or code not in SUPPLEMENTARY_ITEMS):
             continue
         if TARGET_CODE and code != TARGET_CODE:
             continue
 
         if invoice_prefix and not code.startswith(invoice_prefix):
-            log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): prefix mismatch.")
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): prefix mismatch.")
             skipped += 1
             continue
 
         invoice_type = (invoice.get("type") or {}).get("type")
         if invoice_type != "Debit":
-            log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): type is {invoice_type!r}, not Debit.")
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): type is {invoice_type!r}, not Debit.")
             skipped += 1
             continue
 
         invoice_status = (invoice.get("status") or {}).get("type")
         if invoice_status == "Canceled":
-            log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): status is Canceled.")
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): status is Canceled.")
+            skipped += 1
+            continue
+
+        skip_product_keywords = orion_config.get("skip_product_keywords", [])
+        invoice_product_names = [
+            (item.get("product") or {}).get("name") or item.get("description") or ""
+            for item in invoice.get("items") or []
+        ]
+        matched_skip_keyword = next(
+            (keyword for keyword in skip_product_keywords
+             if any(keyword.lower() in name.lower() for name in invoice_product_names)),
+            None,
+        )
+        if matched_skip_keyword:
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): product matches "
+                f"configured skip keyword {matched_skip_keyword!r}. Not synced.")
             skipped += 1
             continue
 
@@ -151,64 +167,97 @@ def main():
             )
         except (MissingAccountConfigError, MissingCustomerCodeError,
                 MissingItemCodeError, MissingPaymentTermError, UnhandledDiscountError) as e:
-            log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): {e}")
+            log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): {e}")
             skipped += 1
             continue
 
-        if SUPPLEMENTARY_MODE:
+        if SUPPLEMENTARY_MODE and tenant_name == "ksa_production":
             selected_indexes = SUPPLEMENTARY_ITEMS[code]
             if max(selected_indexes, default=-1) >= len(payload["Items"]):
-                log(f"[ksa_production] [SKIP] invoice {invoice_id} ({code}): "
+                log(f"[{tenant_name}] [SKIP] invoice {invoice_id} ({code}): "
                     f"expected missing item indexes {selected_indexes}, but payload has "
                     f"{len(payload['Items'])} items.")
                 skipped += 1
                 continue
             payload["Items"] = [payload["Items"][index] for index in selected_indexes]
             payload["Cloud Invoice No"] = f"{code}-01"
-            log(f"[ksa_production] [SUPPLEMENTARY] invoice {invoice_id} ({code}): "
+            log(f"[{tenant_name}] [SUPPLEMENTARY] invoice {invoice_id} ({code}): "
                 f"selected item indexes {selected_indexes}; Cloud Invoice No -> "
                 f"{payload['Cloud Invoice No']}")
 
         if OVERRIDE_CLOUD_INVOICE_NO and code == TARGET_CODE:
             payload["Cloud Invoice No"] = OVERRIDE_CLOUD_INVOICE_NO
-            log(f"[ksa_production] [OVERRIDE] invoice {invoice_id} ({code}): "
+            log(f"[{tenant_name}] [OVERRIDE] invoice {invoice_id} ({code}): "
                 f"Cloud Invoice No -> {OVERRIDE_CLOUD_INVOICE_NO}")
 
         try:
-            result_push = push_payload(payload, invoice_id, "ksa_production", orion_client=orion_client)
+            result_push = push_payload(payload, invoice_id, tenant_name, orion_client=orion_client)
         except DuplicateInvoiceError:
-            log(f"[ksa_production] [DUPLICATE] invoice {invoice_id} ({code}) already exists in Orion, skipping.")
+            log(f"[{tenant_name}] [DUPLICATE] invoice {invoice_id} ({code}) already exists in Orion, skipping.")
             duplicates += 1
             continue
         except InvoiceRejectedError as e:
-            log(f"[ksa_production] [REJECTED] invoice {invoice_id} ({code}): {e}")
+            log(f"[{tenant_name}] [REJECTED] invoice {invoice_id} ({code}): {e}")
             rejected += 1
             continue
 
-        log(f"[ksa_production] [OK] invoice {invoice_id} ({code}) -> {result_push}")
+        log(f"[{tenant_name}] [OK] invoice {invoice_id} ({code}) -> {result_push}")
 
         if result_push.get("mode") == "posted":
             if not orion_invoice_number_field_id:
-                log(f"[ksa_production] [FIELD-SKIP] invoice {invoice_id}: orion_invoice_number_field_id not configured.")
+                log(f"[{tenant_name}] [FIELD-SKIP] invoice {invoice_id}: orion_invoice_number_field_id not configured.")
             else:
                 document_no = (result_push.get("response") or {}).get("DocumentNo")
                 if not document_no:
-                    log(f"[ksa_production] [WARN] invoice {invoice_id}: no DocumentNo to write back.")
+                    log(f"[{tenant_name}] [WARN] invoice {invoice_id}: no DocumentNo to write back.")
                 else:
                     try:
                         client.set_invoice_custom_field(invoice_id, orion_invoice_number_field_id, str(document_no))
                     except Exception as e:
-                        log(f"[ksa_production] [WARN] invoice {invoice_id}: could not write "
+                        log(f"[{tenant_name}] [WARN] invoice {invoice_id}: could not write "
                             f"Orion Invoice Number back to BSS: {type(e).__name__}: {e}")
                     else:
-                        log(f"[ksa_production] [FIELD] invoice {invoice_id}: wrote Orion Invoice "
+                        log(f"[{tenant_name}] [FIELD] invoice {invoice_id}: wrote Orion Invoice "
                             f"Number {document_no!r} back to BSS field {orion_invoice_number_field_id}.")
 
         processed += 1
 
-    log(f"\n[ksa_production] done. processed={processed} skipped={skipped} "
+    log(f"\n[{tenant_name}] done. processed={processed} skipped={skipped} "
         f"duplicates={duplicates} rejected={rejected}")
-    log("(state/ksa_production.json was NOT touched by this script.)")
+    log(f"(state/{tenant_name}.json was NOT touched by this script.)\n")
+    return processed, skipped, duplicates, rejected
+
+
+def main():
+    load_dotenv(os.path.join(SYNC_DIR, ".env"))
+
+    log_lines = []
+
+    def log(msg):
+        print(msg)
+        log_lines.append(msg)
+
+    orion_base_url = os.environ.get("ORION_BASE_URL")
+    orion_username = os.environ.get("ORION_USERNAME")
+    orion_password = os.environ.get("ORION_PASSWORD")
+    if not (orion_base_url and orion_username and orion_password):
+        log("[ERROR] ORION_BASE_URL/ORION_USERNAME/ORION_PASSWORD not set in .env. Aborting, nothing pushed.")
+        return
+    orion_client = OrionClient(orion_base_url, orion_username, orion_password)
+
+    tenants = [t.strip() for t in os.environ.get("PUSH_TENANTS", ",".join(DEFAULT_TENANTS)).split(",") if t.strip()]
+    log(f"Tenants: {tenants}   Date filter: {DATE_FILTER}\n")
+
+    totals = {"processed": 0, "skipped": 0, "duplicates": 0, "rejected": 0}
+    for tenant_name in tenants:
+        processed, skipped, duplicates, rejected = push_tenant(tenant_name, orion_client, log)
+        totals["processed"] += processed
+        totals["skipped"] += skipped
+        totals["duplicates"] += duplicates
+        totals["rejected"] += rejected
+
+    log(f"All tenants done. processed={totals['processed']} skipped={totals['skipped']} "
+        f"duplicates={totals['duplicates']} rejected={totals['rejected']}")
 
     os.makedirs(LOGS_DIR, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
