@@ -246,6 +246,7 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         # has the same real product name ("M365 - Microsoft 365 Business Standard
         # (New Commerce)") that a normal line would've gotten from product.name.
         product_name = product.get("name") or item.get("description") or ""
+        item_code = resolve_item_code(product_name)
         subscriptions = item.get("subscriptions") or []
         sub_id = subscriptions[0]["id"] if subscriptions else ""
         start_dt = _parse(item["startDate"]) if item.get("startDate") else None
@@ -255,7 +256,19 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         # BSS product/part code, and the billing period as "YYYY-MM-DD to YYYY-MM-DD"
         # all in one string: "M365 - ... (New Commerce) (<sub-id>) | <part-code> |
         # 2026-08-02 to 2026-08-06". Perpetual lines have no subscription/dates.
-        desc = product_name
+        # Azure Reserved Instance lines (item_code == MSRI-CNS) all share the same
+        # generic product.name ("Azure Plan Reserved Instances"), even across
+        # different VM sizes/regions on the same invoice; the actual distinguishing
+        # detail (e.g. "Reserved VM Instance, Standard_D16s_v5, AE North, 1 Year")
+        # lives in item['description'] instead. Confirmed with the user 2026-08-31:
+        # use that for the description text specifically, keyed off the resolved
+        # item code (not the raw product name string) so this still applies
+        # correctly if a differently-worded product name ever also resolves to
+        # MSRI-CNS. Item code resolution itself still keys off product_name.
+        if item_code == "MSRI-CNS" and item.get("description"):
+            desc = item["description"]
+        else:
+            desc = product_name
         if sub_id:
             desc += f" ({sub_id})"
         if product.get("code"):
@@ -286,7 +299,7 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
         net_lc = round(net_fc * orion_rate, 2)
 
         items.append({
-            "Item code": resolve_item_code(product_name),
+            "Item code": item_code,
             "Item description": desc,
             "Grade code 1": "NA",
             "Grade code 2": "NA",
