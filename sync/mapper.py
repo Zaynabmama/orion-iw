@@ -97,13 +97,10 @@ KEYWORD_MAP = {
     ("Office LTSC Professional Plus 2024 (Commercial)", "MSPER-CNS"): "MSPER-CNS",
     ("Excel LTSC 2024", "excel ltsc", "MSPER-CNS"): "MSPER-CNS",
     ("Project Professional 2024 (Commercial) (Subs ID)", "project professional 2024", "MSPER-CNS"): "MSPER-CNS",
-    ("SQL Server 2025 - 1 User CAL (Commercial)", "sql server 2025 - 1 user cal", "MSPER-CNS"): "MSPER-CNS",
-    ("SQL Server 2025 Enterprise core - 2 core License Pack (Commercial)", "sql server 2025 enterprise core", "MSPER-CNS"): "MSPER-CNS",
-    ("SQL Server 2025 Enterprise - 2 core License Pack - 3 year", "sql server 2025 enterprise - 2 core license pack - 3 year", "MSPER-CNS"): "MSPER-CNS",
-    # Not in the source script's map either (a gap there too), seen on real KSA invoices
-    # 2026-08-10; every other SQL Server 2025 product maps to MSPER-CNS.
-    ("SQL Server 2025 Standard core - 2 core License Pack (Commercial)", "sql server 2025 standard core", "MSPER-CNS"): "MSPER-CNS",
-    ("SQL Server 2025 Standard edition Perpetual 1 Server License (Commercial)", "sql server 2025 standard edition perpetual 1 server license", "MSPER-CNS"): "MSPER-CNS",
+    # Every SQL Server 2025 SKU (edition/core-count/license-length all vary)
+    # maps to MSPER-CNS; generalized 2026-08-31 after individually adding 5
+    # separate exact-name entries one at a time as each new SKU showed up.
+    ("sql server 2025",): "MSPER-CNS",
     ("Visual Studio Professional 2026 (Commercial)", "visual studio professional 2026", "MSPER-CNS"): "MSPER-CNS",
     ("Windows 11 Enterprise LTSC 2024 Upgrade (Commercial)", "windows 11 enterprise ltsc 2024 upgrade", "MSPER-CNS"): "MSPER-CNS",
     ("Windows 10 Enterprise LTSC 2021 Upgrade (Commercial)", "windows 10 enterprise ltsc 2021 upgrade", "MSPER-CNS"): "MSPER-CNS",
