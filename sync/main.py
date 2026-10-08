@@ -32,6 +32,7 @@ from mapper import (
     MissingItemCodeError,
     MissingPaymentTermError,
     UnhandledDiscountError,
+    add_subscription_lpo_to_descriptions,
 )
 from orion_client import DuplicateInvoiceError, InvoiceRejectedError, OrionClient, push_payload
 import notifier
@@ -153,6 +154,8 @@ def sync_tenant(tenant_config, orion_client, log):
                 f"configured skip keyword {matched_skip_keyword!r}. Not synced.")
             skipped += 1
             continue
+
+        add_subscription_lpo_to_descriptions(invoice, client)
 
         # Mindware bills the partner (billingTo), not the end customer (account).
         # That's the account whose `code` becomes Orion's "Customer code" field.

@@ -89,6 +89,9 @@ class BSSClient:
     def get_account(self, account_id):
         return self._get(f"/api/accounts/{account_id}")
 
+    def get_subscription_custom_fields(self, subscription_id):
+        return self._get(f"/api/subscriptions/{subscription_id}/customfields")
+
     def set_invoice_custom_field(self, invoice_id, field_id, value):
         """PUT /api/invoices/{invoiceId}/customfields. Writes one custom field
         value onto a BSS invoice. Used to record Orion's DocumentNo back onto the

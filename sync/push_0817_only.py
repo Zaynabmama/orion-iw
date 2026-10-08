@@ -15,7 +15,9 @@ Env vars:
   PUSH_DATE_END   optional inclusive end date, YYYY-MM-DD (single day if unset)
   PUSH_TENANTS    optional comma-separated tenant list (default: ksa_production,kuwait,freezone,uae)
   PUSH_ONLY_CODE  optional: restrict to one invoice code (any tenant)
+    PUSH_ONLY_CODES optional: comma-separated invoice codes to process (any tenant)
   PUSH_CLOUD_INVOICE_NO  optional: override Cloud Invoice No for PUSH_ONLY_CODE
+    PUSH_EXCLUDE_AZURE_PLAN=1 optional: omit regular Azure plan lines from targeted payloads
   PUSH_SUPPLEMENTARY=1   optional: ksa_production-only supplementary-items mode (see below)
 """
 
@@ -33,6 +35,7 @@ from mapper import (
     MissingItemCodeError,
     MissingPaymentTermError,
     UnhandledDiscountError,
+    add_subscription_lpo_to_descriptions,
 )
 from orion_client import DuplicateInvoiceError, InvoiceRejectedError, OrionClient, push_payload
 
@@ -42,8 +45,14 @@ LOGS_DIR = os.path.join(SYNC_DIR, "logs")
 DEFAULT_TENANTS = ["ksa_production", "kuwait", "freezone", "uae"]
 
 TARGET_CODE = os.environ.get("PUSH_ONLY_CODE")
+TARGET_CODES = {
+    code.strip()
+    for code in (os.environ.get("PUSH_ONLY_CODES") or "").split(",")
+    if code.strip()
+}
 OVERRIDE_CLOUD_INVOICE_NO = os.environ.get("PUSH_CLOUD_INVOICE_NO")
 SUPPLEMENTARY_MODE = os.environ.get("PUSH_SUPPLEMENTARY") == "1"
+EXCLUDE_AZURE_PLAN = os.environ.get("PUSH_EXCLUDE_AZURE_PLAN") == "1"
 # ksa_production-only: re-push just specific missing line items from specific
 # invoices as a separate supplementary invoice (Cloud Invoice No suffixed "-01").
 SUPPLEMENTARY_ITEMS = {
@@ -98,14 +107,21 @@ def push_tenant(tenant_name, orion_client, log):
         api_version=bss.get("api_version", "3"),
     )
 
-    result = client._get("/api/invoices", params={
-        "pageIndex": 1,
-        "pageSize": 200,
-        "include": "items,customFields",
-        "$orderBy": "invoiceDate asc",
-        "$filter": DATE_FILTER,
-    })
-    invoices = result.get("data", [])
+    invoices = []
+    page_index = 1
+    while True:
+        result = client._get("/api/invoices", params={
+            "pageIndex": page_index,
+            "pageSize": 200,
+            "include": "items,customFields",
+            "$orderBy": "invoiceDate asc",
+            "$filter": DATE_FILTER,
+        })
+        invoices.extend(result.get("data", []))
+        paging = result.get("paging") or {}
+        if page_index >= paging.get("totalPages", page_index) or not result.get("data"):
+            break
+        page_index += 1
     log(f"[{tenant_name}] Pulled {len(invoices)} invoices from BSS.\n")
 
     account_cache = {}
@@ -118,6 +134,8 @@ def push_tenant(tenant_name, orion_client, log):
         if SUPPLEMENTARY_MODE and (tenant_name != "ksa_production" or code not in SUPPLEMENTARY_ITEMS):
             continue
         if TARGET_CODE and code != TARGET_CODE:
+            continue
+        if TARGET_CODES and code not in TARGET_CODES:
             continue
 
         if invoice_prefix and not code.startswith(invoice_prefix):
@@ -152,6 +170,14 @@ def push_tenant(tenant_name, orion_client, log):
                 f"configured skip keyword {matched_skip_keyword!r}. Not synced.")
             skipped += 1
             continue
+
+        add_subscription_lpo_to_descriptions(invoice, client)
+
+        if EXCLUDE_AZURE_PLAN:
+            invoice["items"] = [
+                item for item in invoice.get("items") or []
+                if (item.get("description") or "").strip().lower() != "azure plan"
+            ]
 
         billing_id = (invoice.get("billingTo") or invoice["account"])["id"]
         end_customer_id = invoice["account"]["id"]

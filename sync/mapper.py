@@ -87,13 +87,16 @@ class UnhandledDiscountError(Exception):
 # diff; matching is case-insensitive substring, first hit wins, so order matters.
 KEYWORD_MAP = {
     ("windows server", "window server", "Office LTSC Standard", "MSPER-CNS"): "MSPER-CNS",
-    ("azure subscription", "MSAZ-CNS"): "MSAZ-CNS",
-    ("azure prepayment", "MSAZ-CNS"): "MSAZ-CNS",
+    ("System Center 2025 Standard", "MSPER-CNS"): "MSPER-CNS",
+   
     ("google workspace", "GL-WSP-CNS"): "GL-WSP-CNS",
+    ("Project Standard 2024 (Commercial)", "project standard 2024", "MSPER-CNS"): "MSPER-CNS",
     ("m365", "microsoft 365", "office 365", "exchange online", "Microsoft Defender for Endpoint P1", "MS-CNS"): "MS-CNS",
-    ("POWERPLATFORM - Power Apps Premium (New Commerce)", "powerapps premium", "power apps premium", "Power Apps Premium", "MS-CNS"): "MS-CNS",
+    ("POWERPLATFORM - Power Apps Premium (New Commerce)", "powerapps premium", "power apps premium", "Power Apps Premium","POWERPLATFORM - Power Apps per app plan (1 app or website) (New Commerce)", "MS-CNS"): "MS-CNS",
     ("POWERPLATFORM - Power Automate per user plan (New Commerce)", "power automate per user", "Power Automate per user", "MS-CNS"): "MS-CNS",
     ("POWERPLATFORM - Power Automate unattended RPA add-on (New Commerce)", "MS-CNS"): "MS-CNS",
+    ("power pages", "MS-CNS"): "MS-CNS",
+    ("Word LTSC 2024 (Commercial)", "word ltsc", "MSPER-CNS"): "MSPER-CNS",
     ("Office LTSC Professional Plus 2024 (Commercial)", "MSPER-CNS"): "MSPER-CNS",
     ("Excel LTSC 2024", "excel ltsc", "MSPER-CNS"): "MSPER-CNS",
     ("Project Professional 2024 (Commercial) (Subs ID)", "project professional 2024", "MSPER-CNS"): "MSPER-CNS",
@@ -113,11 +116,12 @@ KEYWORD_MAP = {
     ("power bi", "MS-CNS"): "MS-CNS",
     ("planner", "project plan", "MS-CNS"): "MS-CNS",
     ("power automate premium", "MS-CNS"): "MS-CNS",
-    ("power automate process", "MS-CNS"): "MS-CNS",
+    ("POWERPLATFORM - Power Automate Hosted Process", "power automate hosted process", "power automate process", "MS-CNS"): "MS-CNS",
     ("visio", "MS-CNS"): "MS-CNS",
     ("Microsoft Entra ID Governance (Education Faculty Pricing)", "Power Apps Premium (Non-Profit Pricing)", "MS-CNS"): "MS-CNS",
-    ("MSRI-CNS",): "MSRI-CNS",
+    ("MSRI-CNS","Reserved VM Instance","Fabric Capacity Reservation",): "MSRI-CNS",
     ("dynamics 365", "MS-CNS"): "MS-CNS",
+     ("Azure RI Billing Importer", "azure ri billing importer"): "MSRI-CNS",
     ("AWS Account", "AWS"): "AWS-UTILITIES-CNS",
     ("minecraft education per user", "MS-CNS"): "MS-CNS",
 }
@@ -134,6 +138,25 @@ def resolve_item_code(product_name):
         f"No KEYWORD_MAP entry matches product name {product_name!r}. "
         f"Add a keyword for it in mapper.py."
     )
+
+
+def add_subscription_lpo_to_descriptions(invoice, bss_client):
+    """Append populated subscription-level Subs LPO values to item descriptions."""
+    for item in invoice.get("items") or []:
+        for subscription in item.get("subscriptions") or []:
+            custom_fields = bss_client.get_subscription_custom_fields(subscription["id"])
+            for group in custom_fields or []:
+                for field in group.get("groupFields") or []:
+                    if (field.get("name") or "").strip().lower() != "subs lpo":
+                        continue
+                    values = field.get("values") or []
+                    value = values[0].get("value") if values else None
+                    if value not in (None, ""):
+                        item["_subs_lpo"] = str(value)
+                    break
+                else:
+                    continue
+                break
 
 
 def build_orion_payload(invoice, billing_account, end_customer_account, orion_config,
@@ -240,7 +263,13 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
 
     items = []
     for item in invoice.get("items", []):
+        # BSS adds zero-value Azure RI tracking lines alongside the billable RI
+        # lines. The product name is the same on both, so only skip the exact
+        # zero-value tracking rows.
         product = item.get("product") or {}
+        is_importer_line = (item.get("description") or "").strip().lower() == "azure ri billing importer"
+        if is_importer_line and not item.get("unitPrice") and not item.get("total"):
+            continue
         # Some lines (seen 2026-08-14, e.g. DNSA-26-003827) carry no linked catalog
         # product at all. product.name is unavailable, but item['description']
         # has the same real product name ("M365 - Microsoft 365 Business Standard
@@ -275,6 +304,8 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             desc += f" | {product['code']}"
         if start_dt and end_dt:
             desc += f" | {format_date_iso(start_dt)} to {format_date_iso(end_dt)}"
+        if item.get("_subs_lpo"):
+            desc += f" | Subs LPO: {item['_subs_lpo']}"
 
         # Precise (unrounded) local-currency rate, used for the line total so a
         # rounded display Rate can't drift the total on high-quantity lines.
