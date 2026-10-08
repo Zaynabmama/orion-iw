@@ -340,7 +340,10 @@ def build_orion_payload(invoice, billing_account, end_customer_account, orion_co
             "Location code": orion_config["sales_location"],
             "Delivery location code": orion_config["del_location"],
             "Invoiced quantity": _num(quantity),
-            "Item Rate": round(precise_rate, 2),
+            # Sent unrounded (user, 2026-10-08): a 2dp Rate (0.64 for 0.6375 SAR)
+            # made Rate x quantity disagree with the line total, e.g.
+            # DNSA-26-004554 showed 16,320.00 against a correct 16,256.25.
+            "Item Rate": precise_rate,
             "Foreign currency value": fc_value,
             "Discount percentage": _num(discount_pct),
             "FC actual value": fc_actual,
